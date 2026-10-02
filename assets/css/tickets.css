@@ -521,3 +521,34 @@ body.fp-page .nc-page { background: var(--nc-peche); }
   body, .nc-page { background: #fff !important; }
   .nc-grille-wrap { overflow: visible; border: 0; }
 }
+
+/* Champ à choix multiple (ex. Services impactés) */
+.rp-multi { display: flex; flex-wrap: wrap; gap: 4px 16px; padding-top: 5px; }
+.rp-multi label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.rp-multi[data-disabled] label { cursor: default; color: #777; }
+.rp-champ.rp-modifie .rp-multi { background: #fff6d1; outline: 1px solid #d9a400; outline-offset: 3px; }
+
+/* ---------- Création de ticket (modèle « Réception tickets » Netcom) ---------- */
+.ct-cadre { max-width: 1000px; background: #e6e6e6; padding: 10px 10px 14px; font-size: 13px; color: #666; }
+.ct-lib { color: #D98200; font-weight: bold; }
+.ct-ligne { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; }
+.ct-ligne input { width: 230px; height: 26px; border: 1px solid #aaa; padding: 0 6px; font-size: 13px; background: #fff; }
+.ct-rs { background: #d3d3d3; font-weight: bold; color: #444; padding: 1px 8px; }
+.ct-rs:empty { display: none; }
+.ct-consigne { margin: 10px 0 6px; }
+.ct-onglets { background: #fff; border: 1px solid #ddd; border-radius: 4px; padding: 3px; }
+.ct-tabs { display: flex; flex-wrap: wrap; gap: 3px; padding: 4px 4px 0; background: linear-gradient(#f9b44a, #f6a828); border: 1px solid #e78f08; border-radius: 4px; }
+.ct-tab {
+  margin-bottom: -1px; padding: 7px 14px; border: 1px solid #ccc; border-bottom: 0; border-radius: 4px 4px 0 0;
+  background: #f6f6f6; color: #1c94c4; font: bold 14px Arial, Helvetica, sans-serif; cursor: pointer;
+}
+.ct-tab:hover { background: #fdf5ce; }
+.ct-tab[aria-selected="true"] { background: #fff; color: #eb8f00; border-color: #fbd850; }
+.ct-panneau { background: #eee; padding: 14px 16px; }
+.ct-panneau textarea { width: 100%; border: 1px solid #ccc; border-radius: 3px; padding: 6px 8px; font: inherit; font-size: 13px; resize: vertical; background: #fff; }
+.ct-commun { margin-top: 12px; padding: 0 6px; }
+.ct-notif { max-width: 1000px; margin-top: 14px; }
+.rp-pied .rp-petit { margin: 0; }
+.ct-panneau .ct-col1 { grid-column: 1; }
+.ct-pied { max-width: 1000px; }
+@media (max-width: 520px) { .ct-panneau .ct-col1 { grid-column: auto; } }

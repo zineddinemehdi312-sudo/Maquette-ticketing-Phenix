@@ -47,7 +47,7 @@
    * ===================================================================== */
   const CLE = 'phenix-tickets-lot1';
   const VERSION_DONNEES = 2; // à incrémenter quand le jeu de données fictives change
-  const store = { profil: 'agent', colonnes: {}, champsAjoutes: [], tickets: {}, demandes: {} };
+  const store = { profil: 'agent', colonnes: {}, champsAjoutes: [], tickets: {}, demandes: {}, nouveaux: {} };
   function champValide(c) { return c && typeof c.code === 'string' && typeof c.libelle === 'string' && typeof c.type === 'string'; }
   function charger() {
     try {
@@ -61,6 +61,7 @@
       const memesDonnees = o.versionDonnees === VERSION_DONNEES;
       if (memesDonnees && o.tickets && typeof o.tickets === 'object') store.tickets = o.tickets;
       if (memesDonnees && o.demandes && typeof o.demandes === 'object') store.demandes = o.demandes;
+      if (memesDonnees && o.nouveaux && typeof o.nouveaux === 'object') store.nouveaux = o.nouveaux;
     } catch (e) { /* stockage indisponible : la démo fonctionne sans mémoire */ }
   }
   function sauver() {
@@ -86,7 +87,7 @@
   function appliquerChampsAjoutes() {
     store.champsAjoutes.forEach((c) => {
       TICKETS.forEach((t) => {
-        if (applicable(c, t) && !(c.code in t.champs)) t.champs[c.code] = PHX.valeurDemo(c, t);
+        if (!t.cree && applicable(c, t) && !(c.code in t.champs)) t.champs[c.code] = PHX.valeurDemo(c, t);
       });
     });
   }
@@ -135,6 +136,7 @@
     if (!applicable(c, t)) return '<td title="Non applicable à cette typologie"></td>';
     const v = valeur(c, t);
     if (c.code === 'agent' && !v) return '<td><span class="nc-non-affecte">Non affecté</span></td>';
+    if (Array.isArray(v)) return v.length ? '<td>' + esc(v.join(', ')) + '</td>' : '<td class="vide">—</td>';
     if (v === null || v === '') return c.defaut ? '<td></td>' : '<td class="vide">—</td>';
     if (c.code === 'partenaireCode') return '<td><a href="' + lienPartenaire(v) + '" title="Ouvrir la fiche partenaire (onglet Gestion)">' + esc(v) + '</a></td>';
     switch (c.type) {
@@ -154,6 +156,7 @@
     const v = valeur(c, t);
     if (c.code === 'agent' && !v) return 'Non affecté';
     if (v === null || v === undefined || v === '') return '';
+    if (Array.isArray(v)) return v.join(', ');
     switch (c.type) {
       case 'datetime': return fDateHeure(v);
       case 'date': return fDate(v);
@@ -201,6 +204,7 @@
       if (mp[2] && p) (mp[2] === 'tickets' ? pageTicketsPartenaire : pageDemandesPartenaire)(p);
       else pagePartenaire(code, r.params);
     }
+    else if (r.chemin === '/ticket/nouveau') pageNouveauTicket(r.params);
     else if (m) pageTicket(+m[1]);
     else if (r.chemin === '/demandes/nouvelle') pageNouvelleDemande(r.params);
     else if (r.chemin === '/demandes') pageGestionDemandes();
@@ -432,6 +436,7 @@
     if (v === null || v === undefined || v === '') return null;
     if (c.type === 'etat') return PHX.ETATS.indexOf(PHX.etat(v));
     if (c.type === 'booleen') return v ? 1 : 0;
+    if (Array.isArray(v)) return v.length ? norm(v.join(', ')) : null;
     if (typeof v === 'string') return norm(v);
     return v;
   }
@@ -529,12 +534,13 @@
   const LIB_CHANGEMENT = { destinataires: 'Destinataires additionnels' };
   const EQUIPES_ORDRE = unique(Object.keys(PHX.EQUIPES).map((a) => PHX.EQUIPES[a]));
   // Chemins écrits en entier : build.py les remplace par les images intégrées
-  const ICONES = { maj: 'assets/img/nav_go_orange_16.gif', partenaire: 'assets/img/nav_user_16.gif', demande: 'assets/img/nav_notes_add_16.gif' };
+  const ICONES = { maj: 'assets/img/nav_go_orange_16.gif', partenaire: 'assets/img/nav_user_16.gif', demande: 'assets/img/nav_notes_add_16.gif', retour: 'assets/img/nav_copy_prev_16.gif' };
   const img = (cle) => '<img src="' + ICONES[cle] + '" alt="" width="16" height="16">';
 
   // Valeur lisible d'un changement dans l'historique (montants masqués selon RG-15)
   function valeurHisto(code, v) {
     if (v === null || v === undefined || v === '') return code === 'agent' ? 'Non affecté' : '—';
+    if (Array.isArray(v)) return v.length ? esc(v.join(', ')) : '—';
     const c = champ(code);
     if (c && c.sensible && !profil().montants) return '🔒';
     if (!c) return esc(v);
@@ -566,6 +572,8 @@
       corps += ligne('Partenaire', esc(t.partenaireCode + ' – ' + t.partenaireRS)) +
         ligne('Typologie', esc(libTypo(e.typo || t.typo) + ' › ' + libSous(e.typo || t.typo, e.sous || t.sous))) +
         ligne('Objet', esc(t.objet)) +
+        (e.servicesImpactes && e.servicesImpactes.length ? ligne('Services impactés', esc(e.servicesImpactes.join(', '))) : '') +
+        (e.interlocuteur || e.joignable ? ligne('Interlocuteur', esc(e.interlocuteur || '—') + (e.joignable ? ' – joignable au ' + esc(e.joignable) : '')) : '') +
         ligne('Description', esc(e.commentaire)) +
         ligne('Notification', 'envoyée à ' + esc(e.notifies.join(', ')));
     } else {
@@ -722,7 +730,8 @@
     montantAvoirHT: 'Obligatoire si un avoir est accordé.',
     montantRecouvreHT: '0 € si rien n’a été recouvré.',
     gesteAccorde: 'Obligatoire pour passer en Résolu ou Rejeté. Cumulable avec un avoir.',
-    montantGesteHT: 'Obligatoire si un geste co est accordé.'
+    montantGesteHT: 'Obligatoire si un geste co est accordé.',
+    servicesImpactes: 'Choix multiple.'
   };
   const isoJour = (ts) => { if (ts === null || ts === undefined) return ''; const x = new Date(ts); return x.getFullYear() + '-' + pad(x.getMonth() + 1) + '-' + pad(x.getDate()); };
   const champsDuBrouillon = (d) => catalogue().filter((c) => estSpecifique(c) && applicable(c, { typo: d.typo, sous: d.sous }));
@@ -748,17 +757,23 @@
       const id = 'rpc_' + c.code;
       let v = d.champs[c.code];
       if (v === undefined) v = null;
-      const lab = '<label for="' + id + '">' + esc(c.libelle) + ' <span class="req" data-req="' + esc(c.code) + '" aria-hidden="true" hidden>*</span>' + (c.ajoute ? ' <small class="rp-nouveau">nouveau</small>' : '') + '</label>';
+      const lab = (c.type === 'multi' ? '<span class="rp-lib" id="lab_' + id + '">' : '<label for="' + id + '">') + esc(c.libelle) +
+        ' <span class="req" data-req="' + esc(c.code) + '" aria-hidden="true" hidden>*</span>' + (c.ajoute ? ' <small class="rp-nouveau">nouveau</small>' : '') +
+        (c.type === 'multi' ? '</span>' : '</label>');
       if (!autorise(c)) {
         return '<span class="rp-lib">' + esc(c.libelle) + ' :</span><div class="rp-champ"><i class="rp-verrou">🔒 Réservé aux profils habilités (RG-15)</i><div class="tk-err" data-err="' + esc(c.code) + '"></div></div>';
       }
-      let dis = ferme;
+      let dis = ferme || (c.modifManager && !estManager());
       if (c.code === 'avoirAccorde' && rejete) { dis = true; v = false; d.champs.avoirAccorde = false; }
       if (c.code === 'montantAvoirHT' && (rejete || d.champs.avoirAccorde !== true)) { dis = true; v = null; d.champs.montantAvoirHT = null; }
       if (c.code === 'montantGesteHT' && d.champs.gesteAccorde !== true) { dis = true; v = null; d.champs.montantGesteHT = null; }
       const attr = ' id="' + id + '" data-code="' + esc(c.code) + '"' + (dis ? ' disabled' : '');
       let ctl;
-      if (c.type === 'booleen') {
+      if (c.type === 'multi') {
+        const coches = Array.isArray(v) ? v : [];
+        ctl = '<span class="rp-multi" role="group" aria-labelledby="lab_' + id + '" id="' + id + '" data-code="' + esc(c.code) + '"' + (dis ? ' data-disabled' : '') + '>' +
+          c.options.map((o) => '<label><input type="checkbox" value="' + esc(o) + '"' + (coches.indexOf(o) >= 0 ? ' checked' : '') + (dis ? ' disabled' : '') + '> ' + esc(o) + '</label>').join('') + '</span>';
+      } else if (c.type === 'booleen') {
         ctl = '<select' + attr + '><option value="">—</option><option value="oui"' + (v === true ? ' selected' : '') + '>Oui</option><option value="non"' + (v === false ? ' selected' : '') + '>Non</option></select>';
       } else if (c.options) {
         ctl = '<select' + attr + '><option value="">--Sélectionner--</option>' + c.options.map((o) => '<option' + (o === v ? ' selected' : '') + '>' + esc(o) + '</option>').join('') + '</select>';
@@ -771,13 +786,15 @@
       } else {
         ctl = '<input type="text" maxlength="120"' + attr + ' value="' + (v === null ? '' : esc(v)) + '">';
       }
+      const aide = (AIDES_CHAMPS[c.code] || '') + (c.modifManager ? (estManager() ? ' Modification réservée aux managers.' : ' Modifiable uniquement par un manager.') : '');
       return lab + '<div class="rp-champ" data-champ="' + esc(c.code) + '">' + ctl +
-        (AIDES_CHAMPS[c.code] ? '<div class="rp-aide">' + esc(AIDES_CHAMPS[c.code]) + '</div>' : '') +
+        (aide ? '<div class="rp-aide">' + esc(aide.trim()) + '</div>' : '') +
         '<div class="tk-err" data-err="' + esc(c.code) + '"></div></div>';
     }).join('') + '</div>';
   }
 
   function lireValeur(c, el) {
+    if (c.type === 'multi') return $$('input[type="checkbox"]:checked', el).map((x) => x.value);
     const v = el.value.trim();
     if (v === '') return null;
     switch (c.type) {
@@ -797,7 +814,7 @@
     d.commentaire = $('#rpCom').value.trim();
     $$('#rpSpec [data-code]').forEach((el) => {
       const c = champ(el.getAttribute('data-code'));
-      if (c && !el.disabled) d.champs[c.code] = lireValeur(c, el);
+      if (c && !el.disabled && !el.hasAttribute('data-disabled')) d.champs[c.code] = lireValeur(c, el);
     });
   }
 
@@ -807,7 +824,8 @@
     const zone = $('#rpNotif');
     const libres = d.destinataires.filter((x) => x.indexOf('@') >= 0);
     zone.innerHTML = '<p class="rp-petit">(un e-mail sera envoyé aux destinataires ci-dessous à l’enregistrement)</p>' +
-      '<p><b>Toujours notifié :</b> ' + (d.agent ? esc(d.agent) + ' (agent responsable' + (d.agent !== t.agent ? ', après enregistrement' : '') + ')' : '<i>aucun agent responsable</i>') + '</p>' +
+      (ctx.creation ? '<p><b>Notifiée à la création :</b> ' + (ctx.boite ? esc(ctx.boite) + ' (boîte fonctionnelle de la sous-typologie, RG-03)' : '<i>choisissez une sous-typologie</i>') + '</p>' : '') +
+      (ctx.creation ? '' : '<p><b>Toujours notifié :</b> ' + (d.agent ? esc(d.agent) + ' (agent responsable' + (d.agent !== t.agent ? ', après enregistrement' : '') + ')' : '<i>aucun agent responsable</i>') + '</p>') +
       '<p class="rp-petit">Destinataires additionnels de ce ticket : la liste est conservée sur le ticket et modifiable à chaque mise à jour.</p>' +
       EQUIPES_ORDRE.map((eq) => {
         const membres = Object.keys(PHX.EQUIPES).filter((a) => PHX.EQUIPES[a] === eq).sort();
@@ -830,7 +848,7 @@
       const g = e.target.closest('[data-groupe]');
       if (g) { const k = g.getAttribute('data-groupe'); ctx.groupesOuverts[k] = g.getAttribute('aria-expanded') !== 'true'; rendreNotif(ctx); const b = $('[data-groupe="' + k + '"]', zone); if (b) b.focus(); return; }
       const r = e.target.closest('[data-retirer]');
-      if (r) { d.destinataires = d.destinataires.filter((x) => x !== r.getAttribute('data-retirer')); rendreNotif(ctx); evaluer(ctx); return; }
+      if (r) { d.destinataires = d.destinataires.filter((x) => x !== r.getAttribute('data-retirer')); rendreNotif(ctx); (ctx.apres || evaluer)(ctx); return; }
       if (e.target.id === 'rpMailAjout') ajouterMail(ctx);
     };
     zone.onchange = (e) => {
@@ -838,7 +856,7 @@
       if (!cb) return;
       const a = cb.getAttribute('data-dest');
       d.destinataires = cb.checked ? unique(d.destinataires.concat([a])) : d.destinataires.filter((x) => x !== a);
-      rendreNotif(ctx); evaluer(ctx);
+      rendreNotif(ctx); (ctx.apres || evaluer)(ctx);
       const n = $('[data-dest="' + a + '"]', zone); if (n) n.focus();
     };
     const mail = $('#rpMail', zone);
@@ -851,12 +869,13 @@
     if (!estEmail(v)) { err.textContent = 'Adresse e-mail invalide.'; champMail.focus(); return; }
     if (ctx.d.destinataires.indexOf(v) >= 0) { err.textContent = 'Adresse déjà présente.'; return; }
     ctx.d.destinataires.push(v);
-    rendreNotif(ctx); evaluer(ctx);
+    rendreNotif(ctx); (ctx.apres || evaluer)(ctx);
     $('#rpMail').focus();
   }
 
   /* ---------- Contrôles et différences avant enregistrement ---------- */
-  const egal = (a, b) => (a === undefined ? null : a) === (b === undefined ? null : b);
+  const normeValeur = (v) => (Array.isArray(v) ? (v.length ? v.slice().sort().join('|') : null) : (v === undefined ? null : v));
+  const egal = (a, b) => normeValeur(a) === normeValeur(b);
   function differences(ctx) {
     const { t, d } = ctx;
     const ch = [];
@@ -1009,6 +1028,7 @@
         '<li>Seul un manager fait sortir un ticket de « Attente arbitrage ».</li>' +
         '<li>Résolu ou Rejeté renseigne la date de résolution. Une réouverture (retour à Ouvert) l’efface ; l’historique garde la trace.</li>' +
         '<li>Réclamation › Facturation : « Avoir accordé » est obligatoire pour passer en Résolu ou Rejeté ; Rejeté impose « Non ».</li>' +
+        '<li>Réclamation › SAV et Déploiement : les « Services impactés » se saisissent à la création du ticket ; ensuite, seul un manager peut les modifier.</li>' +
         '<li>Toutes les réclamations : « Geste co accordé » est obligatoire pour passer en Résolu ou Rejeté, avec son montant si Oui. Un geste co reste possible sur une réclamation rejetée et s’ajoute à un éventuel avoir.</li>' +
         '<li>Typologie et sous-typologie : modifiables par un manager tant que le ticket n’est pas fermé, avec historique (RG-14).</li>' +
         '<li>Fermé est définitif : le ticket passe en lecture seule.</li>' +
@@ -1583,7 +1603,7 @@
       '<div class="pt-entete"><h2 class="pt-titre">LISTE DES TICKETS PARTENAIRE</h2>' +
       '<span>Code partenaire : <b>' + esc(p.code) + '</b></span><span>Partenaire : <b>' + esc(p.rs) + '</b></span>' +
       '<span class="pt-liens"><a href="' + lienPartenaire(p.code) + '">Retour à la fiche partenaire</a>' +
-      '<a href="#" data-hors-maquette data-msg="L’ouverture d’un ticket depuis la fiche partenaire sera maquettée avec l’étape « création de ticket ».">' + img('demande') + 'Ouvrir un ticket</a></span></div>' +
+      '<a href="#/ticket/nouveau?partenaire=' + encodeURIComponent(p.code) + '">' + img('demande') + 'Ouvrir un ticket</a></span></div>' +
       '<div class="pt-filtres" role="search" aria-label="Filtres des tickets du partenaire">' +
       '<label for="ptEtat">État</label><select id="ptEtat"><option value="">Tous</option><option value="ACTIFS"' + (f.etat === 'ACTIFS' ? ' selected' : '') + '>En cours</option><option value="TRAITES"' + (f.etat === 'TRAITES' ? ' selected' : '') + '>Résolus, rejetés ou fermés</option></select>' +
       '<label for="ptAgent">Agent</label><select id="ptAgent"><option value="">Tous</option><option value="__NA__"' + (f.agent === '__NA__' ? ' selected' : '') + '>Non affecté</option>' + agents.map((a) => '<option' + (a === f.agent ? ' selected' : '') + '>' + esc(a) + '</option>').join('') + '</select>' +
@@ -1876,6 +1896,205 @@
           '<td class="dm-com"><img src="' + ICONE_COM + '" alt="Journal" title="' + esc(journalTexte(d)) + '" width="14" height="16"></td></tr>').join('') +
         '</tbody></table></div>' + pager + '</section>';
     }).join('');
+  }
+
+  /* =====================================================================
+   * Écran 10 – Création de ticket (modèle « Réception tickets » Netcom,
+   *   Reception_tickets.aspx) : partenaire, un onglet par typologie,
+   *   champs du ticket, notification, AJOUTER. CDC § 4.1 et § 7.1.
+   * ===================================================================== */
+  let ctxCT = null;
+
+  function pageNouveauTicket(params) {
+    const p0 = partenaireParCode((params.get('partenaire') || '').toUpperCase());
+    const retour = p0 ? '#/partenaire/' + encodeURIComponent(p0.code) + '/tickets' : '#/tickets';
+    ariane(p0 ? arianePartenaire(p0, [{ lib: 'Tickets', href: retour }, { lib: 'Ouvrir un ticket' }]) : ARIANE.concat([{ lib: 'Ouvrir un ticket' }]));
+    ctxCT = {
+      creation: true, retour, p: p0, typo: PHX.TYPOLOGIES[0].code, tente: false, groupesOuverts: {}, boite: '',
+      t: { agent: null, destinataires: [] },
+      d: { etat: 'OUV', agent: null, typo: PHX.TYPOLOGIES[0].code, sous: '', champs: {}, destinataires: [], commentaire: '' },
+      objet: '', interlocuteur: '', joignable: ''
+    };
+    ctxCT.apres = () => evaluerCreation();
+    page.innerHTML = titre('Ouvrir un ticket', '<a class="nc-btn" href="' + retour + '">' + img('retour') + 'Retour</a>') +
+      '<div class="ct-cadre">' +
+      '<div class="ct-ligne"><label for="ctCode" class="ct-lib">Code partenaire</label>' +
+      '<input id="ctCode" list="ctListePart" autocomplete="off" placeholder="Code SO… ou raison sociale" value="' + (p0 ? esc(p0.code) : '') + '">' +
+      '<datalist id="ctListePart">' + PHX.PARTENAIRES.map((x) => '<option value="' + esc(x.code) + '">' + esc(x.rs) + '</option>').join('') + '</datalist>' +
+      '<button type="button" class="nc-btn" id="ctChercher">Chercher</button>' +
+      '<span class="ct-rs" id="ctRs">' + (p0 ? esc(p0.rs) : '') + '</span><span class="tk-err" data-err-ct="partenaire"></span></div>' +
+      '<p class="ct-consigne"><span class="ct-lib">Choisir la typologie du ticket :</span> elle détermine la file de traitement et les champs à renseigner.</p>' +
+      '<div class="ct-onglets"><div class="ct-tabs" role="tablist" aria-label="Typologie du ticket">' +
+      PHX.TYPOLOGIES.map((T, i) => '<button type="button" role="tab" class="ct-tab" id="ctt_' + T.code + '" data-typo="' + T.code + '" aria-selected="' + (i === 0) + '" aria-controls="ctPanneau"' + (i === 0 ? '' : ' tabindex="-1"') + '>' + esc(T.libelle) + '</button>').join('') +
+      '</div><div class="ct-panneau" id="ctPanneau" role="tabpanel" aria-labelledby="ctt_' + ctxCT.typo + '"></div></div>' +
+      '<div class="rp-grille ct-commun">' +
+      '<label for="ctInterlocuteur">Nom de l’interlocuteur</label><div class="rp-champ"><input type="text" id="ctInterlocuteur" maxlength="80" placeholder="Contact chez le partenaire"></div>' +
+      '<label for="ctJoignable">Joignable au</label><div class="rp-champ"><input type="text" id="ctJoignable" maxlength="40" placeholder="Téléphone ou e-mail"></div>' +
+      '</div></div>' +
+      '<section class="rp-panneau ct-notif" aria-labelledby="ctNotifTitre"><h3 class="rp-panneau-tete" id="ctNotifTitre">Notification par email :</h3><div class="rp-panneau-corps" id="rpNotif"></div></section>' +
+      '<div class="rp-pied ct-pied"><div class="rp-resume" id="ctResume" aria-live="polite"></div>' +
+      '<span class="rp-petit">Le ticket est créé à l’état Ouvert, sans agent : il arrive dans la file de sa typologie.</span>' +
+      '<button type="button" class="rp-btn-enregistrer" id="ctAjouter">AJOUTER</button></div>';
+
+    // Partenaire : recherche par code ou raison sociale
+    const chercher = () => {
+      const v = norm($('#ctCode').value).trim();
+      const p = PHX.PARTENAIRES.find((x) => norm(x.code) === v) || (v ? PHX.PARTENAIRES.find((x) => norm(x.rs).indexOf(v) >= 0 || norm(x.code + ' ' + x.rs).indexOf(v) >= 0) : null);
+      ctxCT.p = p || null;
+      $('#ctRs').textContent = p ? p.rs : '';
+      if (p) $('#ctCode').value = p.code;
+      $('[data-err-ct="partenaire"]').textContent = p || !v ? '' : 'Partenaire introuvable.';
+      evaluerCreation();
+    };
+    $('#ctChercher').addEventListener('click', chercher);
+    $('#ctCode').addEventListener('change', chercher);
+    $('#ctCode').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); chercher(); } });
+
+    // Onglets de typologie (navigation clavier : flèches gauche / droite)
+    const tabs = $$('.ct-tab');
+    const choisir = (b) => {
+      lireCreation();
+      tabs.forEach((x) => { const actif = x === b; x.setAttribute('aria-selected', String(actif)); x.tabIndex = actif ? 0 : -1; });
+      ctxCT.typo = ctxCT.d.typo = b.getAttribute('data-typo');
+      ctxCT.d.sous = ''; ctxCT.d.champs = {};
+      $('#ctPanneau').setAttribute('aria-labelledby', b.id);
+      rendrePanneauCreation(); evaluerCreation();
+    };
+    tabs.forEach((b, i) => {
+      b.addEventListener('click', () => choisir(b));
+      b.addEventListener('keydown', (e) => {
+        if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+        const n = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+        n.focus(); choisir(n);
+      });
+    });
+    $('#ctPanneau').addEventListener('change', (e) => {
+      if (e.target.id === 'ctSous') { lireCreation(); ctxCT.d.champs = {}; rendrePanneauCreation(); const s = $('#ctSous'); if (s) s.focus(); }
+      evaluerCreation();
+    });
+    $('#ctPanneau').addEventListener('input', () => evaluerCreation());
+    $('#ctAjouter').addEventListener('click', ajouterTicket);
+    rendrePanneauCreation();
+    rendreNotif(ctxCT);
+    evaluerCreation();
+    if (!p0) $('#ctCode').focus();
+  }
+
+  const champsCreation = (d) => (d.sous ? champsDuBrouillon(d).filter((c) => c.creation !== false) : []);
+
+  function controleCreation(c, v) {
+    const id = 'ctc_' + c.code;
+    const attr = ' id="' + id + '" data-code-ct="' + esc(c.code) + '"';
+    if (c.type === 'multi') {
+      const coches = Array.isArray(v) ? v : [];
+      return '<span class="rp-multi" role="group" aria-labelledby="lab_' + id + '"' + attr + '>' +
+        c.options.map((o) => '<label><input type="checkbox" value="' + esc(o) + '"' + (coches.indexOf(o) >= 0 ? ' checked' : '') + '> ' + esc(o) + '</label>').join('') + '</span>';
+    }
+    if (c.type === 'booleen') return '<select' + attr + '><option value="">—</option><option value="oui"' + (v === true ? ' selected' : '') + '>Oui</option><option value="non"' + (v === false ? ' selected' : '') + '>Non</option></select>';
+    if (c.options) return '<select' + attr + '><option value="">--Sélectionner--</option>' + c.options.map((o) => '<option' + (o === v ? ' selected' : '') + '>' + esc(o) + '</option>').join('') + '</select>';
+    if (c.type === 'montant') return '<span class="rp-montant"><input type="number" step="0.01" min="0" inputmode="decimal"' + attr + ' value="' + (v === null || v === undefined ? '' : esc(v)) + '"><span class="rp-unite">€ HT</span></span>';
+    if (c.type === 'nombre') return '<input type="number" step="1" min="0"' + attr + ' value="' + (v === null || v === undefined ? '' : esc(v)) + '">';
+    if (c.type === 'date' || c.type === 'datetime') return '<input type="date"' + attr + ' value="' + isoJour(v) + '">';
+    return '<input type="text" maxlength="120"' + attr + ' value="' + (v === null || v === undefined ? '' : esc(v)) + '">';
+  }
+
+  function rendrePanneauCreation() {
+    const d = ctxCT.d, T = PHX.typo(d.typo);
+    const champs = champsCreation(d);
+    $('#ctPanneau').innerHTML = '<div class="rp-grille">' +
+      '<label for="ctSous">Sous-typologie <span class="req" aria-hidden="true">*</span></label><div class="rp-champ"><select id="ctSous"><option value="">--Sélectionner--</option>' +
+      T.sous.map((s) => '<option value="' + s.code + '"' + (s.code === d.sous ? ' selected' : '') + '>' + esc(s.libelle) + '</option>').join('') + '</select>' +
+      '<div class="rp-aide">Détermine la boîte fonctionnelle notifiée.</div><div class="tk-err" data-err-ct="sous"></div></div>' +
+      '<span></span><span></span>' +
+      '<label for="ctObjet" class="ct-col1">Objet <span class="req" aria-hidden="true">*</span></label><div class="rp-champ rp-large"><input type="text" id="ctObjet" maxlength="150" value="' + esc(ctxCT.objet) + '" placeholder="Résumé de la demande du partenaire"><div class="tk-err" data-err-ct="objet"></div></div>' +
+      (champs.length ? '<div class="rp-sec">Champs spécifiques – ' + esc(T.libelle + ' › ' + libSous(d.typo, d.sous)) + '</div>' + champs.map((c) => {
+        const id = 'ctc_' + c.code;
+        const lab = (c.type === 'multi' ? '<span class="rp-lib" id="lab_' + id + '">' : '<label for="' + id + '">') + esc(c.libelle) +
+          ' <span class="req" data-req-ct="' + esc(c.code) + '" aria-hidden="true" hidden>*</span>' + (c.type === 'multi' ? '</span>' : '</label>');
+        if (!autorise(c)) return '<span class="rp-lib">' + esc(c.libelle) + ' :</span><div class="rp-champ"><i class="rp-verrou">🔒 Réservé aux profils habilités (RG-15)</i><div class="tk-err" data-err-ct="' + esc(c.code) + '"></div></div>';
+        const aide = c.modifManager ? (AIDES_CHAMPS[c.code] || '') + ' Ensuite modifiable uniquement par un manager.' : (AIDES_CHAMPS[c.code] || '');
+        return lab + '<div class="rp-champ">' + controleCreation(c, d.champs[c.code]) + (aide ? '<div class="rp-aide">' + esc(aide.trim()) + '</div>' : '') +
+          '<div class="tk-err" data-err-ct="' + esc(c.code) + '"></div></div>';
+      }).join('') : (d.sous ? '<p class="rp-aide rp-large-tout">Aucun champ spécifique à renseigner pour cette sous-typologie.</p>' : '')) +
+      '<label for="ctDesc" class="ct-col1">Description <span class="req" aria-hidden="true">*</span></label><div class="rp-champ rp-large"><textarea id="ctDesc" rows="6" placeholder="Détail de la demande, éléments transmis par le partenaire">' + esc(d.commentaire) + '</textarea><div class="tk-err" data-err-ct="description"></div></div>' +
+      '</div>';
+  }
+
+  function lireCreation() {
+    const d = ctxCT.d;
+    const s = $('#ctSous'); if (s) d.sous = s.value;
+    const o = $('#ctObjet'); if (o) ctxCT.objet = o.value.trim();
+    const de = $('#ctDesc'); if (de) d.commentaire = de.value.trim();
+    ctxCT.interlocuteur = $('#ctInterlocuteur').value.trim();
+    ctxCT.joignable = $('#ctJoignable').value.trim();
+    $$('#ctPanneau [data-code-ct]').forEach((el) => { const c = champ(el.getAttribute('data-code-ct')); if (c) d.champs[c.code] = lireValeur(c, el); });
+    const S = PHX.sousTypo(d.typo, d.sous);
+    const boite = S ? S.boite : '';
+    if (boite !== ctxCT.boite) { ctxCT.boite = boite; rendreNotif(ctxCT); }
+  }
+
+  function evaluerCreation() {
+    lireCreation();
+    const d = ctxCT.d;
+    // Règles des champs spécifiques communes avec la fiche ticket (RG-05, RG-15…)
+    const v = valider({ t: { etat: 'OUV' }, d });
+    const err = Object.assign({}, v.err);
+    if (!ctxCT.p) err.partenaire = $('#ctCode').value.trim() ? 'Partenaire introuvable.' : 'Choisissez un partenaire.';
+    if (!ctxCT.objet) err.objet = 'Champ obligatoire';
+    if (!d.commentaire) err.description = 'Champ obligatoire';
+    $$('[data-req-ct]').forEach((x) => { x.hidden = !v.req[x.getAttribute('data-req-ct')]; });
+    $$('[data-err-ct]').forEach((x) => {
+      const k = x.getAttribute('data-err-ct');
+      if (k === 'partenaire' && !ctxCT.tente) return;
+      x.textContent = ctxCT.tente && err[k] ? err[k] : '';
+    });
+    const nb = Object.keys(err).length;
+    const r = $('#ctResume');
+    r.className = 'rp-resume' + (ctxCT.tente && nb ? ' err' : '');
+    r.textContent = ctxCT.tente && nb ? 'Corrigez ' + (nb > 1 ? 'les ' + nb + ' champs signalés' : 'le champ signalé') + ' avant d’ajouter le ticket.' : '';
+    return { err, avert: v.avert };
+  }
+
+  function ajouterTicket() {
+    ctxCT.tente = true;
+    const { err } = evaluerCreation();
+    if (Object.keys(err).length) {
+      const premier = $('.tk-err[data-err-ct]:not(:empty)');
+      if (premier) { const z = premier.closest('.rp-champ, .ct-ligne'); const ctl = z && $('input, select, textarea', z); (ctl || premier).focus(); premier.scrollIntoView({ block: 'center' }); }
+      return;
+    }
+    const d = ctxCT.d, p = ctxCT.p, S = PHX.sousTypo(d.typo, d.sous);
+    const maintenant = Date.now();
+    const id = TICKETS.reduce((m, x) => Math.max(m, x.id), 0) + 1;
+    const champs = {};
+    champsCreation(d).forEach((c) => { if (autorise(c) && d.champs[c.code] !== undefined) champs[c.code] = d.champs[c.code]; });
+    const destinataires = d.destinataires.slice();
+    const notifies = unique([S.boite].concat(destinataires));
+    const t = {
+      id, typo: d.typo, sous: d.sous, etat: 'OUV', partenaireCode: p.code, partenaireRS: p.rs,
+      dateCreation: maintenant, dateMaj: maintenant, dateResolution: null, dateFermeture: null,
+      agent: null, decision: null, nbDM: 0, champs, boite: S.boite, objet: ctxCT.objet, createur: moi(),
+      destinataires, interlocuteur: ctxCT.interlocuteur, joignable: ctxCT.joignable, dernierCommentaire: d.commentaire, cree: true,
+      historique: [{ type: 'ouverture', date: maintenant, auteur: moi(), etatApres: 'OUV', typo: d.typo, sous: d.sous,
+        servicesImpactes: Array.isArray(champs.servicesImpactes) ? champs.servicesImpactes.slice() : undefined,
+        interlocuteur: ctxCT.interlocuteur, joignable: ctxCT.joignable, changements: [], commentaire: d.commentaire, notifies }]
+    };
+    TICKETS.push(t); PAR_ID[id] = t;
+    store.nouveaux[id] = JSON.parse(JSON.stringify(t)); // état initial ; les mises à jour suivent dans store.tickets
+    sauver();
+    liste.hashListe = ctxCT.retour; liste.ordre = []; liste.pageMemo = 1;
+    location.hash = '#/ticket/' + id;
+    toast('Ticket n° ' + id + ' créé dans la file ' + libTypo(d.typo) + ' › ' + S.libelle + '. E-mail envoyé à : ' + notifies.join(', ') + ' (simulation).');
+  }
+
+  // Tickets créés pendant la démo : rechargés à l'ouverture, avant leurs mises à jour
+  function appliquerNouveaux() {
+    Object.keys(store.nouveaux).forEach((k) => {
+      const t = store.nouveaux[k];
+      if (!t || typeof t.id !== 'number' || PAR_ID[t.id] || !PHX.sousTypo(t.typo, t.sous) || !partenaireParCode(t.partenaireCode) || !Array.isArray(t.historique)) return;
+      const copie = JSON.parse(JSON.stringify(t));
+      TICKETS.push(copie); PAR_ID[copie.id] = copie;
+    });
   }
 
   /* ---------- Sélecteur de colonnes personnalisées (à la Redmine) ---------- */
@@ -2301,6 +2520,7 @@
       '<h3>Données de démonstration</h3>' +
       '<p class="sim-sous">' + TICKETS.length + ' tickets, ' + PHX.PARTENAIRES.length + ' partenaires fictifs, dates recalées sur aujourd’hui.' +
       (Object.keys(store.tickets).length ? ' ' + pluriel(Object.keys(store.tickets).length, 'ticket') + ' mis à jour dans la démo.' : '') +
+      (Object.keys(store.nouveaux).length ? ' ' + pluriel(Object.keys(store.nouveaux).length, 'ticket') + ' créé(s) dans la démo.' : '') +
       ' ' + pluriel(DEMANDES.length, 'demande') + ' de modification' + (Object.keys(store.demandes).length ? ', dont ' + Object.keys(store.demandes).length + ' créée(s) ou modifiée(s) dans la démo' : '') + '.</p>' +
       '<button type="button" class="nc-btn" id="simRaz">Réinitialiser la démo</button>' +
       '<p class="sim-sous">Efface les colonnes choisies, les champs ajoutés, les mises à jour de tickets, les demandes de modification et le profil sélectionné.</p>';
@@ -2352,7 +2572,7 @@
     sauver(); rendreSim(); rafraichirSiListe();
   }
   function reinitialiser() {
-    store.profil = 'agent'; store.colonnes = {}; store.champsAjoutes = []; store.tickets = {}; store.demandes = {};
+    store.profil = 'agent'; store.colonnes = {}; store.champsAjoutes = []; store.tickets = {}; store.demandes = {}; store.nouveaux = {};
     genererDonnees();
     ctxDM = { cle: null };
     ctxPT = { cle: null };
@@ -2381,6 +2601,7 @@
   window.addEventListener('hashchange', naviguer);
   charger();
   appliquerChampsAjoutes();
+  appliquerNouveaux();
   appliquerMisesAJour();
   appliquerDemandes();
   majIdentite();

@@ -116,7 +116,9 @@
    * portee   : typologie (et sous-typologies) pour lesquelles le champ existe
    * sensible : true = montant soumis à RG-15 (profils habilités uniquement)
    * siVide   : valeur affichée quand le champ est applicable mais vide
-   * options  : liste de valeurs proposées à la saisie
+   * options  : liste de valeurs proposées à la saisie (type multi : choix multiple)
+   * modifManager : après la création du ticket, seul un manager peut modifier le champ
+   * creation : false = champ renseigné pendant le traitement, absent du formulaire de création
    * aide     : info-bulle sur l'en-tête
    */
   PHX.CHAMPS_BASE = [
@@ -142,17 +144,22 @@
     { code: 'numFacture', libelle: 'N° de facture', type: 'texte', portee: { typo: 'REC', sous: ['FAC'] } },
     { code: 'avoirDemande', libelle: 'Avoir demandé', type: 'booleen', portee: { typo: 'REC', sous: ['FAC'] } },
     { code: 'montantReclame', libelle: 'Montant réclamé HT', type: 'montant', sensible: true, portee: { typo: 'REC', sous: ['FAC'] } },
-    { code: 'avoirAccorde', libelle: 'Avoir accordé', type: 'booleen', portee: { typo: 'REC', sous: ['FAC'] }, aide: 'Renseigné au passage en Résolu ou Rejeté' },
-    { code: 'montantAvoirHT', libelle: 'Montant avoir HT', type: 'montant', sensible: true, portee: { typo: 'REC', sous: ['FAC'] } },
+    { code: 'avoirAccorde', creation: false, libelle: 'Avoir accordé', type: 'booleen', portee: { typo: 'REC', sous: ['FAC'] }, aide: 'Renseigné au passage en Résolu ou Rejeté' },
+    { code: 'montantAvoirHT', creation: false, libelle: 'Montant avoir HT', type: 'montant', sensible: true, portee: { typo: 'REC', sous: ['FAC'] } },
+
+    // Réclamation › SAV et Déploiement : services impactés (choix multiple).
+    // modifManager : saisi librement à la création, modifiable ensuite par un manager uniquement.
+    { code: 'servicesImpactes', libelle: 'Services impactés', type: 'multi', options: ['Fixe', 'DATA', 'GSM', 'Autre'],
+      portee: { typo: 'REC', sous: ['SAV', 'DEP'] }, modifManager: true, aide: 'Choix multiple, modifiable par un manager une fois le ticket créé' },
 
     // Réclamation, toutes sous-typologies : geste commercial (cumulable avec un avoir)
-    { code: 'gesteAccorde', libelle: 'Geste co accordé', type: 'booleen', portee: { typo: 'REC' }, aide: 'Geste commercial, renseigné au passage en Résolu ou Rejeté' },
-    { code: 'montantGesteHT', libelle: 'Montant geste co HT', type: 'montant', sensible: true, portee: { typo: 'REC' } },
+    { code: 'gesteAccorde', creation: false, libelle: 'Geste co accordé', type: 'booleen', portee: { typo: 'REC' }, aide: 'Geste commercial, renseigné au passage en Résolu ou Rejeté' },
+    { code: 'montantGesteHT', creation: false, libelle: 'Montant geste co HT', type: 'montant', sensible: true, portee: { typo: 'REC' } },
 
     // Recouvrement (CDC § 4.3.2 + montant recouvré)
     { code: 'numFactureImpayee', libelle: 'N° facture impayée', type: 'texte', portee: { typo: 'RCV' } },
     { code: 'montantHTReclame', libelle: 'Montant HT réclamé', type: 'montant', sensible: true, portee: { typo: 'RCV' } },
-    { code: 'montantRecouvreHT', libelle: 'Montant recouvré HT', type: 'montant', sensible: true, siVide: 0, portee: { typo: 'RCV' }, aide: '0 € si rien n\u2019a été recouvré' },
+    { code: 'montantRecouvreHT', creation: false, libelle: 'Montant recouvré HT', type: 'montant', sensible: true, siVide: 0, portee: { typo: 'RCV' }, aide: '0 € si rien n\u2019a été recouvré' },
     { code: 'dateEcheance', libelle: 'Date d\u2019échéance', type: 'date', portee: { typo: 'RCV', sous: ['IMP'] } },
     { code: 'motifRejet', libelle: 'Motif du rejet', type: 'texte', options: PHX.MOTIFS_REJET, portee: { typo: 'RCV', sous: ['REJ'] } },
     { code: 'dateRejet', libelle: 'Date du rejet', type: 'date', portee: { typo: 'RCV', sous: ['REJ'] } },

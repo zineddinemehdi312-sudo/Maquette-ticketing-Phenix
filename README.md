@@ -22,11 +22,12 @@ Les données sont **100 % fictives** : partenaires, agents, factures et montants
 | Statistiques | `#/stats` | Tableau de bord des traitements |
 | Fiche ticket | Bouton **Ouvrir** ou n° de ticket (`#/ticket/<n°>`) | Historique des échanges, demandes rattachées, saisie des paramètres Phenix, commentaire, notifications, enregistrement |
 | Demandes de modification | Lien *Nouvelle demande de modification* de la fiche ticket (`#/demandes/nouvelle?ticket=<n°>`) | Création d'une demande rattachée au ticket, liste filtrable des demandes, fiche de la demande |
+| Création de ticket | Lien *Ouvrir un ticket* de la page Tickets du partenaire (`#/ticket/nouveau?partenaire=<code>`) | Partenaire, onglet par typologie, champs du ticket, notification, AJOUTER |
 | Fiche partenaire | *Afficher partenaire* sur la fiche ticket, ou code partenaire dans les listes (`#/partenaire/<code>`) | Nouvel onglet **Gestion** avec deux boutons : Tickets et Demandes de modification |
 | Tickets du partenaire | Bouton *Tickets* de l'onglet Gestion (`#/partenaire/<code>/tickets`) | Tickets du partenaire, un bloc par typologie |
 | Demandes de modification du partenaire | Bouton *Demandes de modification* de l'onglet Gestion (`#/partenaire/<code>/demandes`) | Demandes du partenaire, détail de chaque demande |
 
-L'étape suivante viendra compléter cette maquette : création de ticket. Le lot 2 (ouverture par les
+Toutes les étapes du lot 1 sont maquettées. La prochaine étape est la mise à jour du CDC. Le lot 2 (ouverture par les
 partenaires depuis l'extranet) est hors périmètre.
 
 ## Comportements attendus
@@ -116,6 +117,9 @@ Correspondance avec la page Netcom :
   - Le montant réclamé est obligatoire et supérieur à 0 si un avoir est demandé (RG-05).
   - *Avoir accordé* est obligatoire pour passer en Résolu ou Rejeté. *Rejeté* impose « Non ».
   - Le montant d'avoir est obligatoire si l'avoir est accordé. Une confirmation est demandée s'il dépasse le montant réclamé.
+- **Réclamation › SAV et Déploiement**
+  - *Services impactés* (Fixe, DATA, GSM, Autre, choix multiple) se renseigne à la création du ticket.
+  - Une fois le ticket créé, seul un manager peut le modifier. Pour les autres profils, le champ est affiché mais verrouillé (propriété `modifManager` du référentiel). Toute modification est tracée dans l'historique.
 - **Toutes les réclamations (Facturation, SAV, Déploiement, Autre)**
   - *Geste co accordé* est obligatoire pour passer en Résolu ou Rejeté.
   - Le montant du geste co est obligatoire et supérieur à 0 si le geste est accordé.
@@ -145,6 +149,7 @@ Exemples de colonnes disponibles :
 |---|---|
 | Informations générales | Typologie, Sous-typologie, Objet, Créé par, Boîte notifiée, Demandes de modification |
 | Réclamation › Facturation | N° de facture, Avoir demandé, Montant réclamé HT, **Avoir accordé**, **Montant avoir HT** |
+| Réclamation › SAV / Déploiement | **Services impactés** : Fixe, DATA, GSM, Autre (choix multiple) |
 | Réclamation (toutes sous-typologies) | **Geste co accordé**, **Montant geste co HT** |
 | Recouvrement | N° facture impayée, Montant HT réclamé, **Montant recouvré HT** (0 € si rien n'est recouvré) |
 | Recouvrement › Impayés | Date d'échéance |
@@ -184,6 +189,32 @@ Les montants sont masqués pour les profils non habilités (RG-15).
 | Fermé | Clôture définitive, lecture seule |
 
 Les transitions autorisées seront décrites avec la fiche ticket (étape suivante).
+
+### Création de ticket (modèle « Réception tickets » de Netcom, CDC § 4.1 et § 7.1)
+
+Le lien **Ouvrir un ticket** de la page *Tickets du partenaire* ouvre le formulaire avec le partenaire prérempli. La page reprend l'organisation Netcom :
+
+1. **Code partenaire** avec *Chercher* : saisie du code ou d'une partie de la raison sociale, avec liste de suggestions. La raison sociale s'affiche sur fond gris.
+2. **Un onglet par typologie** (Réclamation, Déploiement, Facturation, Recouvrement, ADV), à la place des onglets par service de Netcom. Navigation possible au clavier avec les flèches.
+3. **Dans l'onglet** :
+   - sous-typologie, qui détermine la boîte fonctionnelle notifiée ;
+   - objet ;
+   - champs spécifiques à renseigner à la création, générés depuis le référentiel. Exemples : n° de facture, avoir demandé et montant réclamé en Réclamation › Facturation ; services impactés en SAV et Déploiement ; facture impayée et montant en Recouvrement ;
+   - description.
+
+   Les champs renseignés pendant le traitement (avoir accordé, geste co, montant recouvré) n'apparaissent pas à la création (propriété `creation: false`).
+4. **Nom de l'interlocuteur et Joignable au**, repris de Netcom. Ils s'affichent dans le bloc d'ouverture de l'historique.
+5. **Notification par email** : la boîte fonctionnelle de la sous-typologie est notifiée (RG-03). On peut ajouter des agents et des adresses libres ; ils deviennent les destinataires additionnels du ticket.
+6. **AJOUTER** crée le ticket à l'état *Ouvert*, sans agent, dans la file de sa typologie. L'ouverture est inscrite dans l'historique et l'envoi de l'e-mail est simulé. La fiche du nouveau ticket s'affiche ensuite, et *Retour à la liste* ramène aux tickets du partenaire.
+
+**Contrôles** : partenaire, sous-typologie, objet et description obligatoires, ainsi que les règles des champs spécifiques, identiques à la fiche ticket : RG-05 pour le montant réclamé, champs obligatoires du recouvrement, RG-15 pour les montants.
+
+**Éléments Netcom non repris**, à valider :
+
+- *Nouveau*, qui ouvre un second onglet pour une autre demande : après l'ajout, on revient à la liste pour créer le ticket suivant.
+- *Réception réclamation* et sa date.
+- *Priorité*, retirée des tickets Phenix.
+- *Email client* : les notifications aux partenaires relèvent du lot 2.
 
 ### Demandes de modification (modèle « Demandes Clients » de Netcom, CDC § 4.6)
 
@@ -330,7 +361,7 @@ Il sert à la démonstration :
 
 - **Changer de profil** : agent ou manager, qui voient les montants, ou autre équipe, qui ne les voit pas. Chaque profil garde sa propre sélection de colonnes.
 - **Ajouter un champ au référentiel** : libellé, type, typologie, sous-typologie. Le champ apparaît aussitôt dans *Colonnes…* avec la mention « nouveau ». C'est la démonstration du point 1 ci-dessus.
-- **Réinitialiser la démo** : efface aussi les mises à jour de tickets et les demandes créées. Quand le jeu de données fictives change (constante `VERSION_DONNEES`), les mises à jour enregistrées avec l'ancien jeu sont écartées automatiquement. Ces mises à jour sont conservées dans le navigateur, et la liste comme les statistiques en tiennent compte immédiatement.
+- **Réinitialiser la démo** : efface aussi les tickets créés, les mises à jour de tickets et les demandes créées. Quand le jeu de données fictives change (constante `VERSION_DONNEES`), les mises à jour enregistrées avec l'ancien jeu sont écartées automatiquement. Ces mises à jour sont conservées dans le navigateur, et la liste comme les statistiques en tiennent compte immédiatement.
 
 ## Structure
 

@@ -357,6 +357,19 @@
       t.champs.gesteAccorde = rg() < p;
       if (t.champs.gesteAccorde) t.champs.montantGesteHT = Math.max(20, Math.round((20 + Math.pow(rg(), 2) * 480) / 5) * 5);
     }
+    // Services impactés des réclamations SAV et Déploiement, déduits de l'objet
+    if (t.typo === 'REC' && (t.sous === 'SAV' || t.sous === 'DEP')) {
+      var rs = mulberry32(PHX.hash('svc#' + t.id));
+      var o = t.objet.toLowerCase(), svc = [];
+      var OPTIONS_SVC = ['Fixe', 'DATA', 'GSM', 'Autre'];
+      if (/data|fibre|sdsl|lien/.test(o)) svc.push('DATA');
+      if (/voip|appels|standard|sda|trunk/.test(o)) svc.push('Fixe');
+      if (/sim|gsm|mobile/.test(o)) svc.push('GSM');
+      if (/portabilit/.test(o)) svc.push(rs() < 0.5 ? 'Fixe' : 'GSM');
+      if (!svc.length) svc.push(OPTIONS_SVC[Math.floor(rs() * 4)]);
+      else if (rs() < 0.2) svc.push(OPTIONS_SVC[Math.floor(rs() * 3)]);
+      t.champs.servicesImpactes = OPTIONS_SVC.filter(function (x) { return svc.indexOf(x) >= 0; });
+    }
     var r = mulberry32(PHX.hash('histo#' + t.id));
     var H = 3600000, fin = ref - 6 * H;
     var ev = [];
@@ -365,7 +378,9 @@
     if (r() < 0.15) t.destinataires.push('comptabilite@' + slug(t.partenaireRS) + '.example');
     var notifies = function () { return [t.agent].concat(t.destinataires).filter(function (x, i, a) { return x && a.indexOf(x) === i; }); };
 
-    ev.push({ type: 'ouverture', date: t.dateCreation, auteur: t.createur, etatApres: 'OUV', typo: t.typo, sous: t.sous, changements: [], commentaire: description(t), notifies: [t.boite] });
+    ev.push({ type: 'ouverture', date: t.dateCreation, auteur: t.createur, etatApres: 'OUV', typo: t.typo, sous: t.sous,
+      servicesImpactes: t.champs.servicesImpactes ? t.champs.servicesImpactes.slice() : undefined,
+      changements: [], commentaire: description(t), notifies: [t.boite] });
     if (t.agent) {
       var fin1 = t.dateResolution || t.dateMaj;
       var pec = heureBureau(t.dateCreation + Math.max(10 * 60000, (fin1 - t.dateCreation) * (0.05 + r() * 0.25)), r, t.dateCreation, Math.min(fin1, fin));
