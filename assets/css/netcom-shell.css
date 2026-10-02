@@ -1,0 +1,149 @@
+/* Reproduction de l'habillage du CRM Netcom (sb-admin / Bootstrap 3).
+   Couleurs relevées dans sb-admin.css et dans la page TicketsConsulter.aspx. */
+:root {
+  color-scheme: light; /* le CRM est clair uniquement : la maquette reste fidèle */
+  --nc-orange: #EB6200;
+  --nc-orange-vif: #E34C00;
+  --nc-orange-brule: #A64800;
+  --nc-rose: #E22371;
+  --nc-peche: #FECF91;
+  --nc-saumon: #FCB475;
+  --nc-creme: #FFE2AF;
+  --nc-creme-clair: #FFF3E2;
+  --nc-gris-entete: #5B5B5B;
+  --nc-gris-nav: #282828;
+  --nc-gris-ariane: #DCDCDC;
+  --nc-texte: #333333;
+  --nc-lien: #337AB7;
+  --nc-focus: #1F6FB2;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+*, *::before, *::after { box-sizing: inherit; }
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--nc-peche);
+  color: var(--nc-texte);
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.42857;
+}
+a { color: var(--nc-lien); text-decoration: none; }
+a:hover { text-decoration: underline; }
+button, input, select { font: inherit; }
+:focus-visible { outline: 2px solid var(--nc-focus); outline-offset: 1px; }
+
+/* ---------- En-tête orange ---------- */
+.nc-top {
+  display: flex;
+  align-items: stretch;
+  height: 72px;
+  background: var(--nc-orange);
+  color: #fff;
+}
+.nc-logo { width: 225px; flex: none; display: flex; align-items: center; padding-left: 10px; }
+.nc-logo img { height: 54px; width: auto; display: block; }
+.nc-raccourcis { display: flex; }
+.nc-raccourcis img { height: 72px; width: auto; display: block; opacity: .95; }
+.nc-raccourcis a:hover img { opacity: 1; filter: brightness(1.08); }
+.nc-espace { flex: 1; }
+.nc-mdp { display: flex; align-items: center; padding: 0 30px; font-style: italic; font-size: 13px; text-align: center; line-height: 1.35; }
+.nc-identite {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--nc-gris-entete);
+  padding: 0 14px;
+  min-width: 200px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.nc-identite img { width: 50px; height: 50px; border-radius: 50%; display: block; }
+.nc-identite i { display: block; }
+.nc-identite b { display: block; font-size: 11px; }
+
+/* ---------- Barre menu rapide + fil d'Ariane ---------- */
+.nc-barre { display: flex; height: 28px; position: relative; }
+.nc-menu-rapide { width: 225px; flex: none; background: var(--nc-gris-entete); position: relative; }
+.nc-menu-rapide > button {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: space-between;
+  background: none; border: 0; color: #fff;
+  font-size: 12px; font-weight: bold; padding: 0 10px; cursor: pointer;
+}
+.nc-menu-rapide > button span { color: #bbb; font-size: 10px; }
+.nc-menu-rapide > button:hover span { color: #fff; }
+.nc-menu-liste {
+  position: absolute; top: 100%; left: 0; z-index: 30;
+  width: 225px; margin: 0; padding: 0; list-style: none;
+  background: var(--nc-gris-nav);
+  box-shadow: 2px 4px 10px rgba(0, 0, 0, .35);
+}
+.nc-menu-liste a {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px; color: var(--nc-orange-vif);
+  border-bottom: 2px groove #777;
+  font-size: 12px;
+}
+.nc-menu-liste a:hover { background: #3a3a3a; text-decoration: none; }
+.nc-menu-liste a[aria-current="page"] { background: #3a3a3a; }
+.nc-ariane {
+  flex: 1; background: var(--nc-gris-ariane);
+  display: flex; align-items: center; padding: 0 22px;
+  font-family: Verdana, Geneva, sans-serif; font-weight: bold; font-size: 11px;
+  color: var(--nc-orange); white-space: nowrap; overflow: hidden;
+}
+.nc-ariane a { color: var(--nc-orange); }
+.nc-ariane .sep { margin: 0 4px; }
+
+/* ---------- Bandeau rose ---------- */
+.nc-bandeau {
+  background: var(--nc-rose); color: #fff;
+  line-height: 36px; padding: 0 15px; font-size: 14px; font-weight: bold;
+  display: flex; align-items: center; gap: 6px;
+}
+.nc-bandeau img { width: 24px; height: 24px; }
+
+/* ---------- Zone de contenu ---------- */
+.nc-page { background: #fff; padding: 6px 15px 40px; min-height: calc(100vh - 136px); }
+.nc-titre { display: flex; align-items: center; gap: 8px; margin: 8px 0 14px; flex-wrap: wrap; }
+.nc-titre img { height: 25px; }
+.nc-titre h4 { margin: 0; font-size: 18px; color: var(--nc-orange); }
+.nc-titre .nc-sous-titre { font-size: 14px; color: #777; font-weight: normal; }
+.nc-titre .nc-titre-liens { margin-left: auto; display: flex; gap: 6px; }
+
+/* Boutons « classiques » du CRM */
+.nc-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: linear-gradient(#fafafa, #e6e6e6);
+  border: 1px solid #a9a9a9; border-radius: 2px;
+  color: #222; padding: 3px 10px; font-size: 13px; cursor: pointer; line-height: 1.4;
+}
+.nc-btn:hover { background: linear-gradient(#fff, #ececec); border-color: #888; text-decoration: none; }
+.nc-btn:disabled { opacity: .5; cursor: default; }
+.nc-btn-orange { background: var(--nc-orange); border-color: #c85400; color: #fff; }
+.nc-btn-orange:hover { background: var(--nc-orange-vif); border-color: #b04400; }
+
+/* Tuiles de menu (onglet-item Netcom) */
+.nc-tuiles { display: flex; gap: 30px; padding: 30px 10px 20px; flex-wrap: wrap; }
+.nc-tuile { width: 150px; text-align: center; font-size: 12px; color: #000; display: block; padding: 6px 0; }
+.nc-tuile svg { display: block; margin: 0 auto 14px; transition: transform .15s ease; }
+.nc-tuile:hover { text-decoration: none; }
+.nc-tuile:hover svg { transform: scale(1.2); }
+.nc-tuile b { display: block; font-size: 13px; }
+.nc-tuile small { display: block; color: #777; margin-top: 3px; }
+
+@media (prefers-reduced-motion: reduce) { .nc-tuile svg { transition: none; } }
+
+@media (max-width: 1100px) {
+  .nc-raccourcis, .nc-mdp { display: none; }
+}
+@media (max-width: 640px) {
+  .nc-logo { width: auto; }
+  .nc-identite { min-width: 0; }
+  .nc-identite div { display: none; }
+  .nc-menu-rapide { width: 130px; }
+  .nc-ariane { padding: 0 10px; }
+}
