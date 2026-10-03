@@ -103,6 +103,9 @@
     'm.garnier': 'Manager R&F', 'j.lambert': 'Commercial', 'p.henry': 'Exploitation'
   };
 
+  // Recouvrement : cause d'une créance non recouvrable (le reste dû est alors compté irrécouvrable)
+  PHX.CAUSES_IRRECOUVRABLES = ['Compte clos', 'Facture indue', 'Liquidation judiciaire'];
+
   PHX.MOTIFS_REJET = [
     'Provision insuffisante', 'Compte clôturé', 'Opposition du débiteur',
     'Mandat inexistant ou révoqué', 'Coordonnées bancaires erronées'
@@ -160,6 +163,7 @@
     { code: 'numFactureImpayee', libelle: 'N° facture impayée', type: 'texte', portee: { typo: 'RCV' } },
     { code: 'montantHTReclame', libelle: 'Montant HT réclamé', type: 'montant', sensible: true, portee: { typo: 'RCV' } },
     { code: 'montantRecouvreHT', creation: false, libelle: 'Montant recouvré HT', type: 'montant', sensible: true, siVide: 0, portee: { typo: 'RCV' }, aide: '0 € si rien n\u2019a été recouvré' },
+    { code: 'causeIrrecouvrable', creation: false, libelle: 'Cause irrécouvrable', type: 'texte', options: PHX.CAUSES_IRRECOUVRABLES, portee: { typo: 'RCV' }, aide: 'Le reste dû est alors compté irrécouvrable' },
     { code: 'dateEcheance', libelle: 'Date d\u2019échéance', type: 'date', portee: { typo: 'RCV', sous: ['IMP'] } },
     { code: 'motifRejet', libelle: 'Motif du rejet', type: 'texte', options: PHX.MOTIFS_REJET, portee: { typo: 'RCV', sous: ['REJ'] } },
     { code: 'dateRejet', libelle: 'Date du rejet', type: 'date', portee: { typo: 'RCV', sous: ['REJ'] } },

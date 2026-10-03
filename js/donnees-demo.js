@@ -334,7 +334,7 @@
     var c = t.champs;
     if (t.decision === 'REJ' && !(t.typo === 'REC' && c.gesteAccorde)) {
       if (t.typo === 'REC' && t.sous === 'FAC') return 'Réclamation non fondée : facturation conforme au contrat.';
-      if (t.typo === 'RCV') return 'Dossier transmis au contentieux.';
+      if (t.typo === 'RCV') return c.causeIrrecouvrable ? 'Créance irrécouvrable : ' + minuscule(c.causeIrrecouvrable) + '.' : 'Dossier transmis au contentieux.';
       return 'Demande rejetée, justificatifs non fournis.';
     }
     var geste = t.typo === 'REC' && c.gesteAccorde ? ' Geste commercial accordé.' : '';
@@ -342,7 +342,7 @@
     if (t.typo === 'REC' && t.sous === 'FAC') return (c.avoirAccorde ? 'Avoir accordé et transmis au service Facturation pour émission.' : 'Facturation vérifiée, régularisation effectuée sans avoir.') + geste;
     if (t.typo === 'REC' && t.sous === 'SAV') return 'Service rétabli, le partenaire a confirmé.' + geste;
     if (t.typo === 'REC') return 'Traitement terminé, le partenaire a été informé.' + geste;
-    if (t.typo === 'RCV') return (c.montantRecouvreHT || 0) >= c.montantHTReclame ? 'Règlement reçu, dossier soldé.' : 'Règlement partiel reçu, échéancier accepté.';
+    if (t.typo === 'RCV') return (c.montantRecouvreHT || 0) >= c.montantHTReclame ? 'Règlement reçu, dossier soldé.' : c.causeIrrecouvrable ? 'Règlement partiel reçu, solde irrécouvrable : ' + minuscule(c.causeIrrecouvrable) + '.' : 'Règlement partiel reçu, échéancier accepté.';
     if (t.typo === 'DEP') return 'Opération réalisée, partenaire informé.';
     if (t.typo === 'FAC') return 'Document édité et envoyé au partenaire.';
     if (t.typo === 'ADV') return 'Dossier traité par l’ADV, le partenaire a été informé.';
@@ -356,6 +356,15 @@
       var p = t.decision === 'REJ' ? 0.1 : ({ FAC: 0.1, SAV: 0.35, DEP: 0.3, AUT: 0.15 })[t.sous];
       t.champs.gesteAccorde = rg() < p;
       if (t.champs.gesteAccorde) t.champs.montantGesteHT = Math.max(20, Math.round((20 + Math.pow(rg(), 2) * 480) / 5) * 5);
+    }
+    // Recouvrement : cause irrécouvrable sur les dossiers rejetés et sur une partie des recouvrements partiels
+    if (t.typo === 'RCV' && t.decision) {
+      var ri = mulberry32(PHX.hash('irr#' + t.id));
+      var partiel = (t.champs.montantRecouvreHT || 0) < t.champs.montantHTReclame;
+      if (t.decision === 'REJ' || (partiel && ri() < 0.65)) {
+        var u = ri();
+        t.champs.causeIrrecouvrable = u < 0.4 ? 'Compte clos' : u < 0.75 ? 'Liquidation judiciaire' : 'Facture indue';
+      }
     }
     // Services impactés des réclamations SAV et Déploiement, déduits de l'objet
     if (t.typo === 'REC' && (t.sous === 'SAV' || t.sous === 'DEP')) {
@@ -405,6 +414,7 @@
           if (c.montantGesteHT) ch.push({ code: 'montantGesteHT', avant: null, apres: c.montantGesteHT });
         }
         if (t.typo === 'RCV' && c.montantRecouvreHT) ch.push({ code: 'montantRecouvreHT', avant: 0, apres: c.montantRecouvreHT });
+        if (t.typo === 'RCV' && c.causeIrrecouvrable) ch.push({ code: 'causeIrrecouvrable', avant: null, apres: c.causeIrrecouvrable });
         ev.push({ type: 'maj', date: dr, auteur: t.agent, etatAvant: 'OUV', etatApres: t.decision, changements: ch, commentaire: commentaireDecision(t), notifies: notifies() });
         if (t.etat === 'FER') ev.push({ type: 'maj', date: t.dateFermeture, auteur: t.agent, etatAvant: t.decision, etatApres: 'FER', changements: [], commentaire: 'Ticket fermé après confirmation du partenaire.', notifies: notifies() });
       }

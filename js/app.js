@@ -46,7 +46,7 @@
    * Cible SI : préférences de colonnes stockées par utilisateur en base.
    * ===================================================================== */
   const CLE = 'phenix-tickets-lot1';
-  const VERSION_DONNEES = 2; // à incrémenter quand le jeu de données fictives change
+  const VERSION_DONNEES = 3; // à incrémenter quand le jeu de données fictives change
   const store = { profil: 'agent', colonnes: {}, champsAjoutes: [], tickets: {}, demandes: {}, nouveaux: {} };
   function champValide(c) { return c && typeof c.code === 'string' && typeof c.libelle === 'string' && typeof c.type === 'string'; }
   function charger() {
@@ -71,7 +71,26 @@
   /* =====================================================================
    * Données
    * ===================================================================== */
-  const REF = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); })();
+  /* Jeu de données figé : généré pour une date de référence fixe (vendredi 2 octobre 2026),
+   * puis décalé par semaines entières jusqu'à la semaine en cours. Les numéros de tickets
+   * et de demandes restent ainsi identiques d'un jour à l'autre (les jours de semaine
+   * sont conservés) et les mises à jour enregistrées dans le navigateur restent valables. */
+  const REF_DEMO = new Date(2026, 9, 2).getTime();
+  const AUJOURDHUI = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d.getTime(); })();
+  const SEMAINES = Math.max(0, Math.floor(Math.round((AUJOURDHUI - REF_DEMO) / JOUR) / 7));
+  const decaler = (ts) => { if (typeof ts !== 'number') return ts; const d = new Date(ts); d.setDate(d.getDate() + 7 * SEMAINES); return d.getTime(); };
+  function decalerDonnees() {
+    if (!SEMAINES) return;
+    TICKETS.forEach((t) => {
+      ['dateCreation', 'dateMaj', 'dateResolution', 'dateFermeture'].forEach((k) => { t[k] = decaler(t[k]); });
+      ['dateEcheance', 'dateRejet'].forEach((k) => { if (k in t.champs) t.champs[k] = decaler(t.champs[k]); });
+      t.historique.forEach((e) => { e.date = decaler(e.date); });
+    });
+    DEMANDES.forEach((d) => {
+      ['dateCreation', 'dateMaj', 'dateCloture', 'dateEffet'].forEach((k) => { d[k] = decaler(d[k]); });
+      d.journal.forEach((j) => { j.date = decaler(j.date); });
+    });
+  }
   const TICKETS = [];
   const PAR_ID = {};
   const DEMANDES = [];
@@ -79,8 +98,9 @@
     TICKETS.length = 0;
     DEMANDES.length = 0;
     Object.keys(PAR_ID).forEach((k) => { delete PAR_ID[k]; });
-    PHX.genererTickets(REF).forEach((t) => { TICKETS.push(t); PAR_ID[t.id] = t; });
-    PHX.genererDemandes(TICKETS, REF).forEach((d) => DEMANDES.push(d));
+    PHX.genererTickets(REF_DEMO).forEach((t) => { TICKETS.push(t); PAR_ID[t.id] = t; });
+    PHX.genererDemandes(TICKETS, REF_DEMO).forEach((d) => DEMANDES.push(d));
+    decalerDonnees();
   }
   genererDonnees();
 
@@ -731,7 +751,8 @@
     montantRecouvreHT: '0 € si rien n’a été recouvré.',
     gesteAccorde: 'Obligatoire pour passer en Résolu ou Rejeté. Cumulable avec un avoir.',
     montantGesteHT: 'Obligatoire si un geste co est accordé.',
-    servicesImpactes: 'Choix multiple.'
+    servicesImpactes: 'Choix multiple.',
+    causeIrrecouvrable: 'Obligatoire pour passer en Rejeté. Le reste dû (réclamé − recouvré) est alors compté irrécouvrable.'
   };
   const isoJour = (ts) => { if (ts === null || ts === undefined) return ''; const x = new Date(ts); return x.getFullYear() + '-' + pad(x.getMonth() + 1) + '-' + pad(x.getDate()); };
   const champsDuBrouillon = (d) => catalogue().filter((c) => estSpecifique(c) && applicable(c, { typo: d.typo, sous: d.sous }));
@@ -932,6 +953,7 @@
       exiger('montantHTReclame', true);
       if (d.sous === 'IMP') exiger('dateEcheance', true);
       if (d.sous === 'REJ') { exiger('motifRejet', true); exiger('dateRejet', true); }
+      exiger('causeIrrecouvrable', d.etat === 'REJ', 'Obligatoire pour passer en Rejeté.');
       if (c.montantRecouvreHT > 0 && c.montantHTReclame > 0 && c.montantRecouvreHT > c.montantHTReclame) {
         avert.push('Le montant recouvré (' + fmtEur.format(c.montantRecouvreHT) + ') dépasse le montant réclamé (' + fmtEur.format(c.montantHTReclame) + ').');
       }
@@ -1028,6 +1050,7 @@
         '<li>Seul un manager fait sortir un ticket de « Attente arbitrage ».</li>' +
         '<li>Résolu ou Rejeté renseigne la date de résolution. Une réouverture (retour à Ouvert) l’efface ; l’historique garde la trace.</li>' +
         '<li>Réclamation › Facturation : « Avoir accordé » est obligatoire pour passer en Résolu ou Rejeté ; Rejeté impose « Non ».</li>' +
+        '<li>Recouvrement : « Cause irrécouvrable » (compte clos, facture indue, liquidation judiciaire) est obligatoire pour passer en Rejeté ; le reste dû est alors compté irrécouvrable.</li>' +
         '<li>Réclamation › SAV et Déploiement : les « Services impactés » se saisissent à la création du ticket ; ensuite, seul un manager peut les modifier.</li>' +
         '<li>Toutes les réclamations : « Geste co accordé » est obligatoire pour passer en Résolu ou Rejeté, avec son montant si Oui. Un geste co reste possible sur une réclamation rejetée et s’ajoute à un éventuel avoir.</li>' +
         '<li>Typologie et sous-typologie : modifiables par un manager tant que le ticket n’est pas fermé, avec historique (RG-14).</li>' +
@@ -2244,40 +2267,52 @@
 
   /* =====================================================================
    * Écran 3 – Statistiques
+   *   Filtres : période de création (12 mois glissants par défaut), typologie, agent.
+   *   Visuels communs : activité mensuelle (entrants, traités, reliquat),
+   *   tickets par état et sous-typologie avec délai moyen, charge par agent.
+   *   Visuels propres à la typologie filtrée : Réclamation, Recouvrement.
    * ===================================================================== */
-  const stats = { f: {}, deplies: {} };
-  const FILTRES_STATS = { du: '', au: '', agent: '', part: '' };
+  const stats = { f: {}, deplies: {}, pages: {} };
+  const periodeDefaut = () => {
+    const d = new Date(AUJOURDHUI); d.setDate(1); d.setMonth(d.getMonth() - 11);
+    return { du: isoJour(d.getTime()), au: isoJour(AUJOURDHUI) };
+  };
+  const filtresStatsDefaut = () => Object.assign({ typo: '', agent: '' }, periodeDefaut());
 
   function pageStats(params) {
     ariane(ARIANE.concat([{ lib: 'Statistiques' }]));
-    const f = stats.f = Object.assign({}, FILTRES_STATS);
-    Object.keys(f).forEach((k) => { if (params.has(k)) f[k] = params.get(k); });
-    if (!parseIso(f.du)) f.du = '';
-    if (!parseIso(f.au)) f.au = '';
+    const f = stats.f = filtresStatsDefaut();
+    ['du', 'au', 'typo', 'agent'].forEach((k) => { if (params.has(k)) f[k] = params.get(k); });
+    if (!parseIso(f.du)) f.du = periodeDefaut().du;
+    if (!parseIso(f.au)) f.au = periodeDefaut().au;
+    if (f.typo && !PHX.typo(f.typo)) f.typo = '';
+    stats.pages = {};
     page.innerHTML = titre('Statistiques', '<a class="nc-btn" href="#/tickets">Afficher les tickets</a>') +
       '<ul class="nc-filtres" aria-label="Filtres des statistiques">' +
       '<li><label for="sDu"><b>Créés du</b></label><input type="date" id="sDu" value="' + esc(f.du) + '"><label for="sAu"><b>au</b></label><input type="date" id="sAu" value="' + esc(f.au) + '"></li>' +
+      '<li><label for="sTypo"><b>Typologie</b></label><select id="sTypo"><option value="">Toutes</option>' +
+      PHX.TYPOLOGIES.map((T) => '<option value="' + T.code + '"' + (T.code === f.typo ? ' selected' : '') + '>' + esc(T.libelle) + '</option>').join('') + '</select></li>' +
       '<li><label for="sAgent"><b>Agent</b></label><select id="sAgent">' + optionsAgent(f.agent, false) + '</select></li>' +
-      '<li><label for="sPart"><b>Partenaire</b></label><input type="text" class="large" id="sPart" placeholder="Code SO… ou raison sociale" value="' + esc(f.part) + '"></li>' +
       '</ul>' +
       '<div class="nc-actions"><button type="button" class="nc-btn" id="sChercher">Chercher</button>' +
-      '<button type="button" class="nc-btn" id="sRaz">Réinitialiser les filtres</button></div>' +
+      '<button type="button" class="nc-btn" id="sRaz">Réinitialiser les filtres</button><span class="st-periode" id="stPeriode"></span></div>' +
       '<div id="stContenu"></div>';
-    let minuteur = null;
     const appliquer = () => {
-      f.du = $('#sDu').value; f.au = $('#sAu').value; f.agent = $('#sAgent').value; f.part = $('#sPart').value;
+      f.du = $('#sDu').value; f.au = $('#sAu').value; f.typo = $('#sTypo').value; f.agent = $('#sAgent').value;
       const p = new URLSearchParams();
-      Object.keys(f).forEach((k) => { if (f[k]) p.set(k, f[k]); });
+      ['du', 'au', 'typo', 'agent'].forEach((k) => { if (f[k]) p.set(k, f[k]); });
       majHash('/stats', p);
+      stats.pages = {};
       rendreStats();
     };
-    ['#sDu', '#sAu', '#sAgent'].forEach((s) => $(s).addEventListener('change', appliquer));
-    $('#sPart').addEventListener('input', () => { clearTimeout(minuteur); minuteur = setTimeout(appliquer, 250); });
+    ['#sDu', '#sAu', '#sTypo', '#sAgent'].forEach((s) => $(s).addEventListener('change', appliquer));
     $('#sChercher').addEventListener('click', appliquer);
     $('#sRaz').addEventListener('click', () => { majHash('/stats', new URLSearchParams()); pageStats(new URLSearchParams()); });
     $('#stContenu').addEventListener('click', (e) => {
       const b = e.target.closest('[data-deplier]');
-      if (b) { const k = b.getAttribute('data-deplier'); stats.deplies[k] = !stats.deplies[k]; rendreStats(); const nb = $('[data-deplier="' + k + '"]'); if (nb) nb.focus(); }
+      if (b) { const k = b.getAttribute('data-deplier'); stats.deplies[k] = !stats.deplies[k]; rendreStats(); const nb = $('[data-deplier="' + k + '"]'); if (nb) nb.focus(); return; }
+      const pg = e.target.closest('button[data-st-page]');
+      if (pg) { const k = pg.getAttribute('data-st-table'); stats.pages[k] = +pg.getAttribute('data-st-page'); rendreStats(); const t = $('#st_' + k); if (t) t.scrollIntoView({ block: 'nearest' }); }
     });
     rendreStats();
   }
@@ -2285,9 +2320,9 @@
   function lienListe(p) {
     const f = stats.f;
     const q = new URLSearchParams();
-    if (f.part) q.set('part', f.part);
     if (f.du) q.set('du', f.du);
     if (f.au) q.set('au', f.au);
+    if (f.typo) q.set('typo', f.typo);
     if (f.agent) q.set('agent', f.agent);
     Object.keys(p).forEach((k) => { if (p[k]) q.set(k, p[k]); });
     return '#/tickets?' + q.toString();
@@ -2303,24 +2338,81 @@
     });
     return c;
   }
+  // Tickets retenus par la typologie et l'agent (le graphique mensuel couvre ensuite chaque mois de la période)
+  const filtrerTypoAgent = (f) => TICKETS.filter((t) => (!f.typo || t.typo === f.typo) && (!f.agent || t.agent === f.agent));
 
   function rendreStats() {
     const f = stats.f;
-    const nPart = norm(f.part).trim();
     const du = parseIso(f.du), au = parseIso(f.au, true);
-    const base = TICKETS.filter((t) => {
-      if (du && t.dateCreation < du) return false;
-      if (au && t.dateCreation > au) return false;
-      if (f.agent && t.agent !== f.agent) return false;
-      if (nPart && norm(t.partenaireCode).indexOf(nPart) < 0 && norm(t.partenaireRS).indexOf(nPart) < 0) return false;
-      return true;
-    });
-    $('#stContenu').innerHTML = '<div class="st-grille">' + matrice(base) +
-      '<div class="st-ligne-3">' + blocAvoirs(base) + blocGestes(base) + blocRecouvrement(base) + '</div>' +
-      '<div class="st-ligne-agents">' + blocAgents(base) + '</div></div>';
+    const typeAgent = filtrerTypoAgent(f);
+    const base = typeAgent.filter((t) => (!du || t.dateCreation >= du) && (!au || t.dateCreation <= au));
+    const T = PHX.typo(f.typo);
+    $('#stPeriode').innerHTML = 'Période analysée : <b>' + fDate(du) + '</b> au <b>' + fDate(au) + '</b> · ' + esc(T ? T.libelle : 'Toutes typologies') +
+      (f.agent ? ' · ' + esc(f.agent) : '') + ' · <b>' + pluriel(base.length, 'ticket') + '</b>';
+    let specifique = '';
+    if (f.typo === 'REC') {
+      specifique = '<h3 class="st-section">Indicateurs Réclamation</h3><div class="st-ligne-2">' + blocAvoirs(base) + blocGestes(base) + '</div>';
+    } else if (f.typo === 'RCV') {
+      specifique = '<h3 class="st-section">Indicateurs Recouvrement</h3>' + kpiRecouvrement(base) +
+        '<div class="st-grille">' + tableImpayes(base) + syntheseRejets(base) + tableRejets(base) + '</div>';
+    } else if (f.typo) {
+      specifique = '<h3 class="st-section">Indicateurs ' + esc(T.libelle) + '</h3><p class="st-aide">Aucun indicateur propre à cette typologie : les visuels communs ci-dessus tiennent compte du filtre.</p>';
+    } else {
+      specifique = '<p class="st-aide st-invite">Choisissez une typologie dans les filtres pour afficher ses indicateurs propres (Réclamation : avoirs et gestes commerciaux ; Recouvrement : impayés, rejets et montants).</p>';
+    }
+    $('#stContenu').innerHTML = '<h3 class="st-section">Indicateurs communs</h3><div class="st-grille">' +
+      graphiqueMensuel(typeAgent, du, au) + matrice(base) + '<div class="st-ligne-agents">' + blocAgents(base) + '</div></div>' + specifique;
   }
 
-  // Tableau typologie × état (même esprit que « Tickets Stat Général » de Netcom)
+  /* ---------- Activité mensuelle : entrants, traités, reliquat ---------- */
+  function graphiqueMensuel(tickets, du, au) {
+    const mois = [];
+    const d = new Date(du || AUJOURDHUI); d.setDate(1); d.setHours(0, 0, 0, 0);
+    const finPeriode = au || AUJOURDHUI;
+    while (d.getTime() <= finPeriode && mois.length < 36) {
+      const debut = d.getTime(); d.setMonth(d.getMonth() + 1); const fin = d.getTime() - 1;
+      mois.push({ debut, fin, lib: new Date(debut).toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }) });
+    }
+    const series = mois.map((m) => ({
+      lib: m.lib,
+      entrants: tickets.filter((t) => t.dateCreation >= m.debut && t.dateCreation <= m.fin).length,
+      traites: tickets.filter((t) => t.dateResolution && t.dateResolution >= m.debut && t.dateResolution <= m.fin).length,
+      reliquat: tickets.filter((t) => t.dateCreation <= m.fin && (!t.dateResolution || t.dateResolution > m.fin)).length
+    }));
+    const COUL = { entrants: '#EB6200', traites: '#2F8F4E', reliquat: '#5B7FA6' };
+    const LIB = { entrants: 'Entrants', traites: 'Traités', reliquat: 'Reliquat fin de mois' };
+    const max = Math.max(1, ...series.map((s) => Math.max(s.entrants, s.traites, s.reliquat)));
+    const pas = Math.max(1, Math.ceil(max / 5 / 5) * 5);
+    const haut = Math.ceil(max / pas) * pas;
+    const G = 46, H = 230, B = 32, largeurMois = 74, larg = G + series.length * largeurMois + 10;
+    const y = (v) => 14 + (H - 14) * (1 - v / haut);
+    let svg = '';
+    for (let v = 0; v <= haut; v += pas) {
+      svg += '<line x1="' + G + '" x2="' + (larg - 6) + '" y1="' + y(v) + '" y2="' + y(v) + '" stroke="#e3e3e3"/>' +
+        '<text x="' + (G - 6) + '" y="' + (y(v) + 4) + '" text-anchor="end" font-size="11" fill="#777">' + v + '</text>';
+    }
+    series.forEach((s, i) => {
+      const x0 = G + i * largeurMois + 9;
+      ['entrants', 'traites', 'reliquat'].forEach((k, j) => {
+        const x = x0 + j * 19, h = y(0) - y(s[k]);
+        svg += '<rect x="' + x + '" y="' + y(s[k]) + '" width="17" height="' + Math.max(0, h) + '" fill="' + COUL[k] + '"><title>' + esc(s.lib + ' – ' + LIB[k] + ' : ' + s[k]) + '</title></rect>';
+        if (s[k]) svg += '<text x="' + (x + 8.5) + '" y="' + (y(s[k]) - 3) + '" text-anchor="middle" font-size="10" fill="#444">' + s[k] + '</text>';
+      });
+      svg += '<text x="' + (x0 + 27) + '" y="' + (H + 16) + '" text-anchor="middle" font-size="11" fill="#555">' + esc(s.lib) + '</text>';
+    });
+    svg = '<svg viewBox="0 0 ' + larg + ' ' + (H + B) + '" width="' + larg + '" role="img" aria-labelledby="stGraphTitre" class="st-graph"><title id="stGraphTitre">Tickets entrants, traités et reliquat par mois</title>' +
+      '<line x1="' + G + '" x2="' + (larg - 6) + '" y1="' + y(0) + '" y2="' + y(0) + '" stroke="#999"/>' + svg + '</svg>';
+    const legende = '<div class="st-legende">' + Object.keys(LIB).map((k) => '<span><i style="background:' + COUL[k] + '"></i>' + esc(LIB[k]) + '</span>').join('') + '</div>';
+    const donnees = '<details class="st-donnees"><summary>Voir les données</summary><div class="st-wrap"><table class="st-table st-mini"><thead><tr><th class="g" scope="col">Mois</th>' +
+      series.map((s) => '<th scope="col">' + esc(s.lib) + '</th>').join('') + '</tr></thead><tbody>' +
+      ['entrants', 'traites', 'reliquat'].map((k) => '<tr><td class="g">' + esc(LIB[k]) + '</td>' + series.map((s) => '<td>' + s[k] + '</td>').join('') + '</tr>').join('') +
+      '</tbody></table></div></details>';
+    return '<section class="st-bloc" aria-labelledby="stGraphCap"><h4 class="st-cap" id="stGraphCap">Activité mensuelle</h4>' + legende +
+      '<div class="st-wrap st-graph-wrap">' + svg + '</div>' + donnees +
+      '<p class="st-aide">Entrants : tickets créés dans le mois. Traités : tickets passés en Résolu ou Rejeté dans le mois. Reliquat : tickets non traités à la fin du mois. Le graphique suit la typologie et l’agent filtrés.</p></section>';
+  }
+
+  /* ---------- Tickets par état et par sous-typologie ---------- */
   function matrice(base) {
     const cols = [
       ['OUV', 'Ouvert'], ['NA', 'dont non affectés'], ['ARP', 'Attente retour partenaire'], ['AAR', 'Attente arbitrage'],
@@ -2330,28 +2422,35 @@
       cols.map(([k]) => '<td' + (k === 'RES' ? ' class="sep"' : '') + '>' + nbLien(c[k], Object.assign({}, p, k === 'NA' ? { etat: 'OUV', agent: '__NA__' } : { etat: k })) + '</td>').join('') +
       '<td class="sep"><b>' + nbLien(c.total, Object.assign({}, p, { etat: 'TOUS' })) + '</b></td>' +
       '<td>' + (c.dNb ? fmtNb.format(c.dSom / c.dNb) + ' j' : '–') + '</td></tr>';
+    const Tf = PHX.typo(stats.f.typo);
     let corps = '';
-    PHX.TYPOLOGIES.forEach((T) => {
-      const tt = base.filter((t) => t.typo === T.code);
-      const ouvert = !!stats.deplies[T.code];
-      const bouton = '<button type="button" class="deplier" data-deplier="' + T.code + '" aria-expanded="' + ouvert + '"><span aria-hidden="true">' + (ouvert ? '▼' : '▶') + '</span>' + esc(T.libelle) + '</button>';
-      corps += ligne(T.libelle, compter(tt), { typo: T.code }, '', bouton);
-      if (ouvert) T.sous.forEach((S) => { corps += ligne(S.libelle, compter(tt.filter((t) => t.sous === S.code)), { typo: T.code, sous: S.code }, 'sous'); });
-    });
+    if (Tf) {
+      Tf.sous.forEach((S) => { corps += ligne(S.libelle, compter(base.filter((t) => t.sous === S.code)), { typo: Tf.code, sous: S.code }); });
+    } else {
+      PHX.TYPOLOGIES.forEach((T) => {
+        const tt = base.filter((t) => t.typo === T.code);
+        const ouvert = !!stats.deplies[T.code];
+        const bouton = '<button type="button" class="deplier" data-deplier="' + T.code + '" aria-expanded="' + ouvert + '"><span aria-hidden="true">' + (ouvert ? '▼' : '▶') + '</span>' + esc(T.libelle) + '</button>';
+        corps += ligne(T.libelle, compter(tt), { typo: T.code }, '', bouton);
+        if (ouvert) T.sous.forEach((S) => { corps += ligne(S.libelle, compter(tt.filter((t) => t.sous === S.code)), { typo: T.code, sous: S.code }, 'sous'); });
+      });
+    }
     corps += ligne('TOTAL', compter(base), {}, 'total');
-    return '<div><div class="st-wrap"><table class="st-table"><caption>Tickets par typologie et par état</caption><thead><tr><th class="g" scope="col">Typologie</th>' +
+    return '<div><div class="st-wrap"><table class="st-table"><caption>' + (Tf ? 'Tickets par sous-typologie et par état – ' + esc(Tf.libelle) : 'Tickets par typologie, sous-typologie et état') + '</caption><thead><tr>' +
+      '<th class="g" scope="col">' + (Tf ? 'Sous-typologie' : 'Typologie') + '</th>' +
       cols.map(([k, lib]) => '<th scope="col"' + (k === 'RES' ? ' class="sep"' : '') + '>' + esc(lib) + '</th>').join('') +
       '<th scope="col" class="sep">Total</th><th scope="col" title="De la création à la date de résolution">Délai moyen de résolution</th></tr></thead><tbody>' +
       corps + '</tbody></table></div>' +
-      '<p class="st-aide">Cliquez sur une typologie pour afficher ses sous-typologies, et sur un nombre pour ouvrir la liste des tickets correspondante. Les filtres ci-dessus portent sur la date de création.</p></div>';
+      '<p class="st-aide">' + (Tf ? '' : 'Cliquez sur une typologie pour afficher ses sous-typologies. ') + 'Chaque nombre ouvre la liste des tickets correspondante.</p></div>';
   }
 
-  function kv(lib, val, verrou) {
-    return '<tr><td class="g">' + esc(lib) + '</td>' + (verrou ? '<td class="verrou">🔒 Profils habilités</td>' : '<td class="v">' + val + '</td>') + '</tr>';
+  function kv(lib, val, verrou, classe) {
+    return '<tr' + (classe ? ' class="' + classe + '"' : '') + '><td class="g">' + esc(lib) + '</td>' + (verrou ? '<td class="verrou">🔒 Profils habilités</td>' : '<td class="v">' + val + '</td>') + '</tr>';
   }
   const somme = (arr, fn) => arr.reduce((s, t) => s + (fn(t) || 0), 0);
   const tranche = (t) => !!PHX.etat(t.etat).tranche;
 
+  /* ---------- Réclamation ---------- */
   function blocAvoirs(base) {
     const m = !profil().montants;
     const rf = base.filter((t) => t.typo === 'REC' && t.sous === 'FAC');
@@ -2385,29 +2484,88 @@
       return '<tr><td class="g">' + esc(S.libelle) + '</td><td>' + l.length + '</td><td>' + accordes(l).length + '</td><td class="num">' + montant(l) + '</td></tr>';
     }).join('');
     const g = accordes(tr).length;
-    return '<div><div class="st-wrap"><table class="st-table"><caption>Gestes commerciaux – Réclamation</caption><thead><tr>' +
+    return '<div><div class="st-wrap"><table class="st-table"><caption>Gestes commerciaux accordés – Réclamation</caption><thead><tr>' +
       '<th class="g" scope="col">Sous-typologie</th><th scope="col">Tranchées</th><th scope="col">Gestes co accordés</th><th scope="col">Montant HT</th></tr></thead><tbody>' +
       lignes + '<tr class="total"><td class="g">TOTAL</td><td>' + tr.length + '</td><td>' + g + (tr.length ? ' <small>(' + fmtPct.format(g / tr.length) + ')</small>' : '') + '</td><td class="num">' + montant(tr) + '</td></tr>' +
       '</tbody></table></div><p class="st-aide">Réclamations tranchées : Résolu, Rejeté ou Fermé. Un geste co peut s’ajouter à un avoir.</p></div>';
   }
 
-  function blocRecouvrement(base) {
+  /* ---------- Recouvrement ---------- */
+  const reclameRcv = (t) => t.champs.montantHTReclame || 0;
+  const recouvreRcv = (t) => t.champs.montantRecouvreHT || 0;
+  const irrecRcv = (t) => (t.champs.causeIrrecouvrable ? Math.max(0, reclameRcv(t) - recouvreRcv(t)) : 0);
+  const resteRcv = (t) => Math.max(0, reclameRcv(t) - recouvreRcv(t) - irrecRcv(t));
+  const eur = (v) => (profil().montants ? esc(fmtEur.format(v)) : '🔒');
+
+  function kpiRecouvrement(base) {
     const m = !profil().montants;
     const rc = base.filter((t) => t.typo === 'RCV');
     const imp = rc.filter((t) => t.sous === 'IMP').length;
-    const enCours = rc.filter((t) => PHX.etat(t.etat).actif);
-    const reclame = somme(rc, (t) => t.champs.montantHTReclame);
-    const recouvre = somme(rc, (t) => t.champs.montantRecouvreHT);
-    return '<div><div class="st-wrap"><table class="st-table st-kv"><caption>Recouvrement</caption><tbody>' +
-      kv('Dossiers', nbLien(rc.length, { typo: 'RCV', etat: 'TOUS' }) + ' <small>(' + imp + ' impayés, ' + (rc.length - imp) + ' rejets)</small>') +
-      kv('En cours de traitement', nbLien(enCours.length, { typo: 'RCV', etat: 'ACTIFS' })) +
-      kv('Montant HT réclamé', esc(fmtEur.format(reclame)), m) +
-      kv('Montant recouvré HT', esc(fmtEur.format(recouvre)), m) +
-      kv('Taux de recouvrement', reclame ? fmtPct.format(recouvre / reclame) : '–', m) +
-      kv('Reste à recouvrer HT', esc(fmtEur.format(reclame - recouvre)), m) +
-      '</tbody></table></div><p class="st-aide">Un dossier sans montant recouvré compte pour 0 €.</p></div>';
+    const reclame = somme(rc, reclameRcv), recouvre = somme(rc, recouvreRcv), irrec = somme(rc, irrecRcv), reste = somme(rc, resteRcv);
+    const taux = (v) => (reclame ? ' <small>(' + fmtPct.format(v / reclame) + ')</small>' : '');
+    return '<div class="st-wrap st-kpi-wrap"><table class="st-table st-kv st-kpi"><caption>Synthèse des montants – Recouvrement</caption><tbody>' +
+      kv('Dossiers', nbLien(rc.length, { typo: 'RCV', etat: 'TOUS' }) + ' <small>(' + imp + ' impayés, ' + (rc.length - imp) + ' rejets de prélèvement)</small>') +
+      kv('En cours de traitement', nbLien(rc.filter((t) => PHX.etat(t.etat).actif).length, { typo: 'RCV', etat: 'ACTIFS' })) +
+      kv('Montant HT à récupérer (réclamé)', eur(reclame), m) +
+      kv('Montant recouvré HT', eur(recouvre) + (m ? '' : taux(recouvre)), m) +
+      kv('Montant irrécouvrable HT', eur(irrec) + (m ? '' : taux(irrec)), m) +
+      PHX.CAUSES_IRRECOUVRABLES.map((c) => {
+        const l = rc.filter((t) => t.champs.causeIrrecouvrable === c);
+        return kv('dont ' + c.toLowerCase() + ' (' + pluriel(l.length, 'dossier') + ')', eur(somme(l, irrecRcv)), m, 'st-sous-kv');
+      }).join('') +
+      kv('Reste à recouvrer HT', eur(reste) + (m ? '' : taux(reste)), m, 'st-total-kv') +
+      '</tbody></table></div><p class="st-aide">Irrécouvrable : reste dû des dossiers pour lesquels une cause est indiquée (compte clos, facture indue, liquidation judiciaire). Reste à recouvrer = réclamé − recouvré − irrécouvrable.</p>';
   }
 
+  function pagine(cle, lignes, parPage) {
+    const nb = Math.max(1, Math.ceil(lignes.length / parPage));
+    const pg = Math.min(stats.pages[cle] || 1, nb);
+    let pager = '';
+    if (nb > 1) {
+      for (let i = 1; i <= nb; i++) pager += '<button type="button" data-st-table="' + cle + '" data-st-page="' + i + '"' + (i === pg ? ' aria-current="page"' : '') + '>' + i + '</button>';
+      pager = '<div class="nc-pager">' + pager + '<span class="info">Page ' + pg + ' / ' + nb + '</span></div>';
+    }
+    return { vue: lignes.slice((pg - 1) * parPage, pg * parPage), pager };
+  }
+
+  function tableImpayes(base) {
+    const l = base.filter((t) => t.typo === 'RCV' && t.sous === 'IMP').sort((a, b) => resteRcv(b) - resteRcv(a) || (a.champs.dateEcheance || 0) - (b.champs.dateEcheance || 0));
+    const { vue, pager } = pagine('imp', l, 10);
+    const tot = (fn) => eur(somme(l, fn));
+    return '<section id="st_imp"><div class="st-wrap"><table class="st-table st-liste"><caption>Impayés (' + l.length + ')</caption><thead><tr>' +
+      '<th scope="col">N° ticket</th><th class="g" scope="col">Partenaire</th><th scope="col">Facture</th><th scope="col">Échéance</th><th scope="col">Réclamé HT</th>' +
+      '<th scope="col">Recouvré HT</th><th scope="col">Irrécouvrable HT</th><th scope="col">Reste dû HT</th><th scope="col">État</th><th class="g" scope="col">Cause</th></tr></thead><tbody>' +
+      (vue.length ? vue.map((t) => '<tr><td><a href="#/ticket/' + t.id + '">' + t.id + '</a></td><td class="g">' + esc(t.partenaireCode + ' – ' + t.partenaireRS) + '</td>' +
+        '<td>' + esc(t.champs.numFactureImpayee || '') + '</td><td>' + fDate(t.champs.dateEcheance) + '</td><td class="num">' + eur(reclameRcv(t)) + '</td><td class="num">' + eur(recouvreRcv(t)) + '</td>' +
+        '<td class="num">' + eur(irrecRcv(t)) + '</td><td class="num"><b>' + eur(resteRcv(t)) + '</b></td><td>' + badgeEtat(t.etat) + '</td><td class="g">' + esc(t.champs.causeIrrecouvrable || '') + '</td></tr>').join('')
+        : '<tr><td colspan="10">Aucun impayé sur la période.</td></tr>') +
+      '<tr class="total"><td colspan="4" class="g">TOTAL</td><td class="num">' + tot(reclameRcv) + '</td><td class="num">' + tot(recouvreRcv) + '</td><td class="num">' + tot(irrecRcv) + '</td><td class="num">' + tot(resteRcv) + '</td><td colspan="2"></td></tr>' +
+      '</tbody></table></div>' + pager + '<p class="st-aide">Triés par reste dû décroissant.</p></section>';
+  }
+
+  function syntheseRejets(base) {
+    const l = base.filter((t) => t.typo === 'RCV' && t.sous === 'REJ');
+    const ligne = (lib, x, classe) => '<tr' + (classe ? ' class="' + classe + '"' : '') + '><td class="g">' + esc(lib) + '</td><td>' + x.length + '</td><td>' + x.filter((t) => PHX.etat(t.etat).actif).length + '</td>' +
+      '<td class="num">' + eur(somme(x, reclameRcv)) + '</td><td class="num">' + eur(somme(x, recouvreRcv)) + '</td><td class="num">' + eur(somme(x, irrecRcv)) + '</td><td class="num">' + eur(somme(x, resteRcv)) + '</td></tr>';
+    return '<div class="st-wrap"><table class="st-table"><caption>Rejets de prélèvement – synthèse par motif</caption><thead><tr><th class="g" scope="col">Motif du rejet</th>' +
+      '<th scope="col">Rejets</th><th scope="col">En cours</th><th scope="col">Réclamé HT</th><th scope="col">Recouvré HT</th><th scope="col">Irrécouvrable HT</th><th scope="col">Reste dû HT</th></tr></thead><tbody>' +
+      PHX.MOTIFS_REJET.map((mo) => ligne(mo, l.filter((t) => t.champs.motifRejet === mo))).join('') + ligne('TOTAL', l, 'total') + '</tbody></table></div>';
+  }
+
+  function tableRejets(base) {
+    const l = base.filter((t) => t.typo === 'RCV' && t.sous === 'REJ').sort((a, b) => (b.champs.dateRejet || 0) - (a.champs.dateRejet || 0));
+    const { vue, pager } = pagine('rej', l, 10);
+    return '<section id="st_rej"><div class="st-wrap"><table class="st-table st-liste"><caption>Rejets de prélèvement – détail (' + l.length + ')</caption><thead><tr>' +
+      '<th scope="col">N° ticket</th><th class="g" scope="col">Partenaire</th><th scope="col">Date du rejet</th><th class="g" scope="col">Motif</th><th scope="col">RUM</th>' +
+      '<th scope="col">Réclamé HT</th><th scope="col">Recouvré HT</th><th scope="col">Reste dû HT</th><th scope="col">État</th><th class="g" scope="col">Cause</th></tr></thead><tbody>' +
+      (vue.length ? vue.map((t) => '<tr><td><a href="#/ticket/' + t.id + '">' + t.id + '</a></td><td class="g">' + esc(t.partenaireCode + ' – ' + t.partenaireRS) + '</td>' +
+        '<td>' + fDate(t.champs.dateRejet) + '</td><td class="g">' + esc(t.champs.motifRejet || '') + '</td><td>' + esc(t.champs.rum || '') + '</td>' +
+        '<td class="num">' + eur(reclameRcv(t)) + '</td><td class="num">' + eur(recouvreRcv(t)) + '</td><td class="num"><b>' + eur(resteRcv(t)) + '</b></td><td>' + badgeEtat(t.etat) + '</td><td class="g">' + esc(t.champs.causeIrrecouvrable || '') + '</td></tr>').join('')
+        : '<tr><td colspan="10">Aucun rejet sur la période.</td></tr>') +
+      '</tbody></table></div>' + pager + '</section>';
+  }
+
+  /* ---------- Charge par agent ---------- */
   function blocAgents(base) {
     const actifs = base.filter((t) => PHX.etat(t.etat).actif);
     const parAgent = {};
@@ -2418,17 +2576,22 @@
     });
     const na = actifs.filter((t) => !t.agent).length;
     const agents = Object.keys(parAgent).sort((x, y) => parAgent[y].total - parAgent[x].total || (x < y ? -1 : 1));
-    const lignes = '<tr><td class="g"><span class="nc-non-affecte">Non affectés</span></td><td>' + nbLien(na, { etat: 'OUV', agent: '__NA__' }) + '</td><td></td><td></td><td class="sep"><b>' + nbLien(na, { etat: 'OUV', agent: '__NA__' }) + '</b></td></tr>' +
+    const lignes = (stats.f.agent ? '' : '<tr><td class="g"><span class="nc-non-affecte">Non affectés</span></td><td>' + nbLien(na, { etat: 'OUV', agent: '__NA__' }) + '</td><td></td><td></td><td class="sep"><b>' + nbLien(na, { etat: 'OUV', agent: '__NA__' }) + '</b></td></tr>') +
       agents.map((a) => {
         const c = parAgent[a];
         return '<tr><td class="g" title="' + esc(PHX.EQUIPES[a] || '') + '">' + esc(a) + '</td>' +
           ['OUV', 'ARP', 'AAR'].map((k) => '<td>' + nbLien(c[k], { etat: k, agent: a }) + '</td>').join('') +
           '<td class="sep"><b>' + nbLien(c.total, { etat: 'ACTIFS', agent: a }) + '</b></td></tr>';
       }).join('');
+    // Ligne de total par état (non affectés compris dans « Ouvert »)
+    const parEtat = (k) => actifs.filter((t) => t.etat === k).length;
+    const total = actifs.length ? '<tr class="total"><td class="g">TOTAL</td>' +
+      ['OUV', 'ARP', 'AAR'].map((k) => '<td>' + nbLien(parEtat(k), { etat: k }) + '</td>').join('') +
+      '<td class="sep">' + nbLien(actifs.length, { etat: 'ACTIFS' }) + '</td></tr>' : '';
     return '<div><div class="st-wrap"><table class="st-table"><caption>Charge par agent (tickets en cours)</caption><thead><tr>' +
       '<th class="g" scope="col">Agent</th><th scope="col">Ouvert</th><th scope="col" title="Attente retour partenaire">Att. retour partenaire</th>' +
       '<th scope="col" title="Attente arbitrage">Att. arbitrage</th><th scope="col" class="sep">Total</th></tr></thead><tbody>' +
-      lignes + '</tbody></table></div></div>';
+      (lignes || '<tr><td colspan="5">Aucun ticket en cours.</td></tr>') + total + '</tbody></table></div></div>';
   }
 
   /* =====================================================================
@@ -2518,7 +2681,7 @@
       (store.champsAjoutes.length ? '<ul class="sim-liste">' + store.champsAjoutes.map((c) =>
         '<li><span><b>' + esc(c.libelle) + '</b><br><small>' + esc(PHX.groupeChamp(c)) + '</small></span><button type="button" data-sim-suppr="' + esc(c.code) + '">Retirer</button></li>').join('') + '</ul>' : '') +
       '<h3>Données de démonstration</h3>' +
-      '<p class="sim-sous">' + TICKETS.length + ' tickets, ' + PHX.PARTENAIRES.length + ' partenaires fictifs, dates recalées sur aujourd’hui.' +
+      '<p class="sim-sous">' + TICKETS.length + ' tickets, ' + PHX.PARTENAIRES.length + ' partenaires fictifs. Jeu de données figé, dates décalées sur la semaine en cours.' +
       (Object.keys(store.tickets).length ? ' ' + pluriel(Object.keys(store.tickets).length, 'ticket') + ' mis à jour dans la démo.' : '') +
       (Object.keys(store.nouveaux).length ? ' ' + pluriel(Object.keys(store.nouveaux).length, 'ticket') + ' créé(s) dans la démo.' : '') +
       ' ' + pluriel(DEMANDES.length, 'demande') + ' de modification' + (Object.keys(store.demandes).length ? ', dont ' + Object.keys(store.demandes).length + ' créée(s) ou modifiée(s) dans la démo' : '') + '.</p>' +

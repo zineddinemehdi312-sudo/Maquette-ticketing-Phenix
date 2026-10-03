@@ -552,3 +552,28 @@ body.fp-page .nc-page { background: var(--nc-peche); }
 .ct-panneau .ct-col1 { grid-column: 1; }
 .ct-pied { max-width: 1000px; }
 @media (max-width: 520px) { .ct-panneau .ct-col1 { grid-column: auto; } }
+
+/* ---------- Statistiques : sections, graphique mensuel, tables Recouvrement ---------- */
+.st-periode { margin-left: 12px; font-size: 13px; color: #555; }
+.st-section { margin: 22px 0 10px; padding-bottom: 4px; border-bottom: 2px solid var(--nc-orange); color: var(--nc-orange); font-size: 16px; }
+.st-invite { margin-top: 18px; font-size: 13px; }
+.st-bloc { border: 1px solid #8a8a8a; background: #fff; padding: 0 12px 10px; }
+.st-cap { margin: 0 -12px 8px; padding: 6px; text-align: center; color: var(--nc-orange); font-size: 16px; border-bottom: 1px solid #8a8a8a; }
+.st-legende { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12px; color: #444; margin: 4px 0 6px; }
+.st-legende span { display: inline-flex; align-items: center; gap: 6px; }
+.st-legende i { display: inline-block; width: 14px; height: 12px; border-radius: 2px; }
+.st-graph-wrap { border: 0; }
+.st-graph { display: block; max-width: none; height: auto; }
+.st-donnees { margin-top: 6px; font-size: 12px; }
+.st-donnees summary { cursor: pointer; color: var(--nc-lien); }
+.st-mini td, .st-mini th { padding: 3px 6px; height: auto; font-size: 12px; }
+.st-ligne-2 { display: grid; gap: 20px; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+.st-ligne-2 > * { min-width: 0; }
+@media (max-width: 1000px) { .st-ligne-2 { grid-template-columns: minmax(0, 1fr); } }
+.st-kpi-wrap { max-width: 760px; }
+.st-kv tr.st-sous-kv td { background: var(--nc-creme-clair) !important; font-size: 12px; }
+.st-kv tr.st-sous-kv td.g { padding-left: 28px; }
+.st-kv tr.st-total-kv td { background: #fff !important; font-weight: bold; border-top: 1px solid #8a8a8a; }
+.st-liste td { font-size: 12px; height: auto; padding: 4px 6px; white-space: nowrap; }
+.st-liste td.g { white-space: normal; }
+.st-liste .etat { font-size: 10px; }

@@ -5,6 +5,7 @@ Elle reprend l'habillage du CRM Netcom (page *Consulter tickets*) pour que l'éq
 visualise le comportement attendu dans Phenix avant développement.
 
 Les données sont **100 % fictives** : partenaires, agents, factures et montants sont générés.
+Le jeu de données est figé (mêmes numéros de tickets et de demandes chaque jour) ; ses dates sont décalées par semaines entières pour rester proches de la date du jour.
 
 ## Ouvrir la maquette
 
@@ -128,6 +129,7 @@ Correspondance avec la page Netcom :
   - N° de facture impayée et Montant HT réclamé sont obligatoires.
   - Impayés : la date d'échéance est obligatoire. Rejet de prélèvement : le motif et la date du rejet sont obligatoires.
   - Une confirmation est demandée si le montant recouvré dépasse le montant réclamé.
+  - *Cause irrécouvrable* (compte clos, facture indue, liquidation judiciaire) : obligatoire pour passer en Rejeté. Le reste dû (réclamé − recouvré) est alors compté irrécouvrable dans les statistiques.
 - **RG-15** : un profil non habilité ne voit pas les montants, ni dans les champs ni dans l'historique. S'il doit saisir un montant obligatoire, l'enregistrement est bloqué avec un message explicite.
 - **Dates** : *Résolu* ou *Rejeté* renseigne la date de résolution ; une réouverture l'efface. *Fermé* renseigne la date de fermeture.
 
@@ -151,7 +153,7 @@ Exemples de colonnes disponibles :
 | Réclamation › Facturation | N° de facture, Avoir demandé, Montant réclamé HT, **Avoir accordé**, **Montant avoir HT** |
 | Réclamation › SAV / Déploiement | **Services impactés** : Fixe, DATA, GSM, Autre (choix multiple) |
 | Réclamation (toutes sous-typologies) | **Geste co accordé**, **Montant geste co HT** |
-| Recouvrement | N° facture impayée, Montant HT réclamé, **Montant recouvré HT** (0 € si rien n'est recouvré) |
+| Recouvrement | N° facture impayée, Montant HT réclamé, **Montant recouvré HT** (0 € si rien n'est recouvré), **Cause irrécouvrable** |
 | Recouvrement › Impayés | Date d'échéance |
 | Recouvrement › Rejet de prélèvement | Motif du rejet, Date du rejet, Référence mandat (RUM) |
 
@@ -164,16 +166,23 @@ Exemples de colonnes disponibles :
 
 ### Statistiques
 
-Filtres : période de création, agent, partenaire. Chaque nombre est un lien vers la liste
-des tickets correspondante, avec les mêmes filtres.
+**Filtres** : période de création (12 mois glissants par défaut), typologie, agent. La période analysée, la typologie et le nombre de tickets retenus sont rappelés sous les filtres.
 
-| Bloc | Indicateurs |
+**Indicateurs communs**, qui tiennent compte des filtres :
+
+| Visuel | Contenu |
 |---|---|
-| Tickets par typologie et par état | Nombre de tickets par état (dont « non affectés » parmi les Ouverts), total, délai moyen de résolution (de la création à la date de résolution). Chaque typologie se déplie en sous-typologies. |
-| Avoirs – Réclamation › Facturation | Réclamations facturation, en cours, tranchées (Résolu, Rejeté, Fermé), avoirs accordés et part des tranchées, montant réclamé HT des tranchées, montant d'avoir accordé HT, taux accordé / réclamé, montant réclamé HT en cours. |
-| Gestes commerciaux – Réclamation | Par sous-typologie : réclamations tranchées, gestes co accordés, montant HT. Total avec la part des réclamations tranchées ayant reçu un geste. |
-| Recouvrement | Dossiers (impayés / rejets), en cours, montant HT réclamé, montant recouvré HT, taux de recouvrement, reste à recouvrer. |
-| Charge par agent | Tickets en cours par agent et par état, avec la ligne « Non affectés ». |
+| Activité mensuelle | Graphique à barres par mois de la période. *Entrants* : tickets créés dans le mois. *Traités* : tickets passés en Résolu ou Rejeté dans le mois. *Reliquat* : tickets non traités à la fin du mois. Les données sont consultables sous forme de tableau (« Voir les données »). |
+| Tickets par état et par sous-typologie | Sans typologie filtrée : lignes par typologie, dépliables en sous-typologies. Avec une typologie : lignes par sous-typologie. Colonnes : états, dont non affectés, total et délai moyen de résolution. Chaque nombre ouvre la liste filtrée. |
+| Charge par agent | Tickets en cours par agent et par état, avec la ligne « Non affectés » et une ligne de total par état. |
+
+**Indicateurs propres à la typologie filtrée** :
+
+| Typologie | Visuels |
+|---|---|
+| Réclamation | Avoirs (Réclamation › Facturation) ; gestes commerciaux accordés par sous-typologie. |
+| Recouvrement | Synthèse des montants : à récupérer, recouvré, irrécouvrable (détaillé par cause), reste à recouvrer, avec les taux. Table des impayés, triée par reste dû. Synthèse des rejets de prélèvement par motif. Détail des rejets. |
+| Autres | Pas d'indicateur propre : seuls les indicateurs communs s'affichent. |
 
 Les montants sont masqués pour les profils non habilités (RG-15).
 
