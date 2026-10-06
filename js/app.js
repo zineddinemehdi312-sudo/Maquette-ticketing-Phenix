@@ -327,7 +327,7 @@
 
   function pageTickets(params) {
     ariane(ARIANE.concat([{ lib: 'Afficher les tickets' }]));
-    vueListeTickets(page, params, { chemin: '/tickets', titre: true });
+    vueListeTickets(page, params, { chemin: '/tickets', titre: true, masse: true });
   }
 
   /* Liste des tickets réutilisable : page « Afficher les tickets » et onglet
@@ -346,7 +346,7 @@
       (f.partFixe ? '' : '<li><label for="fPart"><b>Partenaire</b></label><input type="text" class="large" id="fPart" placeholder="Code SO… ou raison sociale" value="' + esc(f.part) + '"></li>') +
       '<li><label for="fTypo"><b>Typologie</b></label><select id="fTypo">' + optionsTypo(f.typo) + '</select></li>' +
       '<li><label for="fSous"><b>Sous-typologie</b></label><select id="fSous"' + (f.typo ? '' : ' disabled') + '>' + optionsSous(f.typo, f.sous) + '</select></li>' +
-      '<li><label for="fEtat"><b>État</b></label><select id="fEtat" title="« En cours » = Ouvert, Attente retour partenaire, Attente arbitrage">' + optionsEtat(f.etat) + '</select></li>' +
+      '<li><label for="fEtat"><b>État</b></label><select id="fEtat" title="« En cours » = Ouvert, Attente retour partenaire, Attente arbitrage, Stand-by">' + optionsEtat(f.etat) + '</select></li>' +
       '<li><label for="fAgent"><b>Agent</b></label><select id="fAgent">' + optionsAgent(f.agent, true) + '</select></li>' +
       '<li><label for="fCrea"><b>Créé par</b></label><select id="fCrea">' + optionsCrea(f.crea) + '</select></li>' +
       '<li><label for="fDu"><b>Créé du</b></label><input type="date" id="fDu" value="' + esc(f.du) + '"><label for="fAu"><b>au</b></label><input type="date" id="fAu" value="' + esc(f.au) + '"></li>' +
@@ -362,11 +362,14 @@
       '</select></span></div>' +
       '<div class="nc-grille-wrap" id="grilleWrap"></div>' +
       '<div class="nc-pager" id="pager"></div>' +
-      '<p class="nc-legende" id="legende" hidden>Cellule vide : champ non applicable à la typologie du ticket. « — » : champ applicable mais pas encore renseigné.</p>';
+      '<p class="nc-legende" id="legende" hidden>Cellule vide : champ non applicable à la typologie du ticket. « — » : champ applicable mais pas encore renseigné.</p>' +
+      (cfg.masse ? barreMasse() : '');
+    if (!liste.selection || !liste.memeListe) liste.selection = new Set();
+    liste.memeListe = false;
 
     // Événements des filtres
     let minuteur = null;
-    const appliquer = () => { lireFiltres(); liste.page = 1; rafraichirListe(); };
+    const appliquer = () => { lireFiltres(); liste.page = 1; if (liste.selection) liste.selection.clear(); rafraichirListe(); };
     ['#fNum', '#fPart'].filter((s) => $(s)).forEach((s) => {
       $(s).addEventListener('input', () => { clearTimeout(minuteur); minuteur = setTimeout(appliquer, 250); });
       $(s).addEventListener('keydown', (e) => { if (e.key === 'Enter') { clearTimeout(minuteur); appliquer(); } });
@@ -404,6 +407,7 @@
       const b = e.target.closest('button[data-page]');
       if (b && !b.disabled) { liste.page = +b.getAttribute('data-page'); rafraichirListe(); $('#grilleWrap').scrollIntoView({ block: 'nearest' }); }
     });
+    if (cfg.masse) brancherMasse();
     rafraichirListe();
   }
 
@@ -511,13 +515,16 @@
         '<span class="tri" aria-hidden="true">' + (actif ? (liste.tri.sens > 0 ? '▲' : '▼') : '') + '</span></th>';
     }).join('');
 
-    const thOuvrir = '<th scope="col" class="col-ouvrir"><span class="sr-only">Ouvrir le ticket</span></th>';
-    const tdOuvrir = (t) => '<td class="col-ouvrir"><a class="nc-btn-ouvrir" href="#/ticket/' + t.id + '" aria-label="Ouvrir le ticket n° ' + t.id + '">Ouvrir</a></td>';
+    const masse = liste.cfg && liste.cfg.masse;
+    const thSel = masse ? '<th scope="col" class="col-select"><input type="checkbox" id="selPage" aria-label="Sélectionner les tickets de la page"></th>' : '';
+    const tdSel = (t) => masse ? '<td class="col-select"><input type="checkbox" data-sel="' + t.id + '"' + (liste.selection.has(t.id) ? ' checked' : '') + ' aria-label="Sélectionner le ticket n° ' + t.id + '"></td>' : '';
+    const thOuvrir = thSel + '<th scope="col" class="col-ouvrir"><span class="sr-only">Ouvrir le ticket</span></th>';
+    const tdOuvrir = (t) => tdSel(t) + '<td class="col-ouvrir"><a class="nc-btn-ouvrir" href="#/ticket/' + t.id + '" aria-label="Ouvrir le ticket n° ' + t.id + '">Ouvrir</a></td>';
     if (!res.length) {
-      $('#grilleWrap').innerHTML = '<table class="nc-grille"><thead><tr>' + thOuvrir + entetes + '</tr></thead></table>' +
+      $('#grilleWrap').innerHTML = '<table class="nc-grille' + (masse ? ' avec-selection' : '') + '"><thead><tr>' + thOuvrir + entetes + '</tr></thead></table>' +
         '<div class="nc-vide-grille">Aucun ticket ne correspond à ces filtres.<br><button type="button" class="nc-btn" data-raz>Réinitialiser les filtres</button></div>';
     } else {
-      $('#grilleWrap').innerHTML = '<table class="nc-grille"><caption class="sr-only">Liste des tickets</caption><thead><tr>' + thOuvrir + entetes + '</tr></thead><tbody>' +
+      $('#grilleWrap').innerHTML = '<table class="nc-grille' + (masse ? ' avec-selection' : '') + '"><caption class="sr-only">Liste des tickets</caption><thead><tr>' + thOuvrir + entetes + '</tr></thead><tbody>' +
         vue.map((t) => '<tr>' + tdOuvrir(t) + cols.map((c) => celluleHtml(c, t)).join('') + '</tr>').join('') + '</tbody></table>';
     }
 
@@ -538,6 +545,112 @@
     }
     $('#pager').innerHTML = pg;
     $('#legende').hidden = !cols.some((c) => !c.defaut && estSpecifique(c));
+    if (masse) majSelection();
+  }
+
+  /* ---------- Affectation en masse (liste « Afficher les tickets ») ---------- */
+  function barreMasse() {
+    const manager = estManager();
+    const agents = manager ? Object.keys(PHX.EQUIPES).sort() : [moi()];
+    const verrou = manager ? '' : ' disabled title="Requalification réservée au manager (RG-14)"';
+    return '<section class="ms-barre" aria-labelledby="msTitre"><h3 id="msTitre">Affectation en masse</h3>' +
+      '<div class="ms-ligne"><span class="ms-compte" id="msCompte" aria-live="polite"></span><button type="button" class="ms-lien" id="msVider">Tout désélectionner</button></div>' +
+      '<div class="ms-ligne">' +
+      '<label for="msTypo">Typologie</label><select id="msTypo"' + verrou + '><option value="">— Inchangée —</option>' + PHX.TYPOLOGIES.map((T) => '<option value="' + T.code + '">' + esc(T.libelle) + '</option>').join('') + '</select>' +
+      '<label for="msSous">Sous-typologie</label><select id="msSous" disabled><option value="">— Choisir une typologie —</option></select>' +
+      '<label for="msAgent">Agent</label><select id="msAgent"><option value="">— Inchangé —</option>' + agents.map((a) => '<option value="' + esc(a) + '">' + (a === moi() && !manager ? 'Moi (' + esc(a) + ')' : esc(a) + ' (' + esc(PHX.EQUIPES[a]) + ')') + '</option>').join('') + '</select>' +
+      '<button type="button" class="nc-btn nc-btn-orange" id="msValider" disabled>Affecter la sélection</button></div>' +
+      '<p class="rp-aide">' + (manager
+        ? 'Cochez les tickets à gauche de la liste, choisissez la typologie, la sous-typologie et/ou l’agent, puis validez. Chaque ticket modifié est tracé dans son historique ; les tickets fermés sont ignorés.'
+        : 'Profil agent : prise en charge en masse des tickets non affectés. La requalification et l’affectation à un autre agent sont réservées au manager.') + '</p></section>';
+  }
+
+  function majSelection() {
+    const sel = liste.selection, cases = $$('#grilleWrap [data-sel]');
+    const coches = cases.filter((c) => sel.has(+c.getAttribute('data-sel'))).length;
+    const tout = $('#selPage');
+    if (tout) { tout.checked = cases.length > 0 && coches === cases.length; tout.indeterminate = coches > 0 && coches < cases.length; }
+    const n = sel.size;
+    $('#msCompte').textContent = n ? pluriel(n, 'ticket') + (n > 1 ? ' sélectionnés' : ' sélectionné') : 'Aucun ticket sélectionné';
+    $('#msVider').hidden = !n;
+    const choix = $('#msAgent').value || $('#msTypo').value;
+    $('#msValider').disabled = !n || !choix;
+  }
+
+  function brancherMasse() {
+    $('#grilleWrap').addEventListener('change', (e) => {
+      const c = e.target.closest('[data-sel]');
+      if (c) { const id = +c.getAttribute('data-sel'); if (c.checked) liste.selection.add(id); else liste.selection.delete(id); majSelection(); return; }
+      if (e.target.id === 'selPage') {
+        $$('#grilleWrap [data-sel]').forEach((x) => { const id = +x.getAttribute('data-sel'); x.checked = e.target.checked; if (e.target.checked) liste.selection.add(id); else liste.selection.delete(id); });
+        majSelection();
+      }
+    });
+    $('#msTypo').addEventListener('change', () => {
+      const T = PHX.typo($('#msTypo').value);
+      $('#msSous').innerHTML = T ? '<option value="">--Sélectionner--</option>' + T.sous.map((x) => '<option value="' + x.code + '">' + esc(x.libelle) + '</option>').join('') : '<option value="">— Choisir une typologie —</option>';
+      $('#msSous').disabled = !T;
+      majSelection();
+    });
+    $('#msAgent').addEventListener('change', majSelection);
+    $('#msVider').addEventListener('click', () => { liste.selection.clear(); $$('#grilleWrap [data-sel]').forEach((x) => { x.checked = false; }); majSelection(); });
+    $('#msValider').addEventListener('click', preparerMasse);
+  }
+
+  // Calcule ce qui sera appliqué à chaque ticket sélectionné, puis demande confirmation
+  function preparerMasse() {
+    const typo = $('#msTypo').value, sous = $('#msSous').value, agent = $('#msAgent').value || null;
+    if (typo && !sous) { toast('Choisissez la sous-typologie correspondant à la typologie.'); $('#msSous').focus(); return; }
+    const manager = estManager();
+    const plan = [], ignores = {};
+    const ignorer = (raison, t) => { (ignores[raison] = ignores[raison] || []).push(t.id); };
+    liste.selection.forEach((id) => {
+      const t = PAR_ID[id];
+      if (!t) return;
+      if (t.etat === 'FER') { ignorer('Tickets fermés (lecture seule)', t); return; }
+      const ch = [];
+      if (typo && manager && (t.typo !== typo || t.sous !== sous)) {
+        if (t.typo !== typo) ch.push({ code: 'typologie', avant: libTypo(t.typo), apres: libTypo(typo) });
+        ch.push({ code: 'sousTypologie', avant: libSous(t.typo, t.sous), apres: libSous(typo, sous) });
+      }
+      if (agent && t.agent !== agent) {
+        if (manager || !t.agent) ch.push({ code: 'agent', avant: t.agent, apres: agent });
+        else { ignorer('Tickets déjà affectés à un autre agent (réaffectation réservée au manager)', t); return; }
+      }
+      if (!ch.length) { ignorer('Tickets déjà conformes aux choix', t); return; }
+      plan.push({ t, ch });
+    });
+    const resume = [];
+    if (typo) resume.push('Typologie : <b>' + esc(libTypo(typo) + ' › ' + libSous(typo, sous)) + '</b>');
+    if (agent) resume.push('Agent : <b>' + esc(agent) + '</b>');
+    ouvrirModal({
+      titre: 'Affectation en masse',
+      corps: '<p>' + resume.join('<br>') + '</p>' +
+        '<p><b>' + pluriel(plan.length, 'ticket') + (plan.length > 1 ? ' seront modifiés' : ' sera modifié') + '</b>' + (plan.length ? ' : ' + plan.map((x) => 'n° ' + x.t.id).join(', ') : '') + '.</p>' +
+        (Object.keys(ignores).length ? '<p>Ignorés :</p><ul>' + Object.keys(ignores).map((r) => '<li>' + esc(r) + ' : n° ' + ignores[r].join(', ') + ' (' + ignores[r].length + ')</li>').join('') + '</ul>' : '') +
+        (typo ? '<p class="rp-aide">Les champs spécifiques propres à la nouvelle typologie seront à compléter sur chaque fiche ; les saisies précédentes restent conservées.</p>' : ''),
+      pied: '<span class="flex"></span><button type="button" class="nc-btn" data-fermer>Annuler</button>' +
+        (plan.length ? '<button type="button" class="nc-btn nc-btn-orange" id="msConfirmer">Confirmer</button>' : ''),
+      petit: true, focus: plan.length ? '#msConfirmer' : '[data-fermer]'
+    });
+    if (plan.length) $('#msConfirmer').addEventListener('click', () => { fermerModal(); appliquerMasse(plan, typo, sous, agent); });
+  }
+
+  function appliquerMasse(plan, typo, sous, agent) {
+    const maintenant = Date.now();
+    plan.forEach(({ t, ch }) => {
+      if (ch.some((x) => x.code === 'sousTypologie')) { t.typo = typo; t.sous = sous; }
+      if (ch.some((x) => x.code === 'agent')) t.agent = agent;
+      const notifies = unique([t.agent].concat(t.destinataires || []));
+      t.historique.push({ type: 'maj', saisie: true, date: maintenant, auteur: moi(), etatAvant: t.etat, etatApres: t.etat, changements: ch, commentaire: 'Affectation en masse.', notifies });
+      t.dateMaj = maintenant;
+      t.dernierCommentaire = 'Affectation en masse.';
+      store.tickets[t.id] = instantane(t);
+    });
+    sauver();
+    liste.selection.clear();
+    rafraichirListe();
+    toast(pluriel(plan.length, 'ticket') + ' mis à jour : historique complété et notifications envoyées (simulation).');
   }
 
   /* =====================================================================
@@ -645,7 +758,7 @@
   /* ---------- Bloc de saisie : paramètres Phenix au-dessus du commentaire ---------- */
   function rendreFormulaire(t) {
     const ferme = t.etat === 'FER';
-    const d = { etat: t.etat, agent: t.agent, typo: t.typo, sous: t.sous, champs: Object.assign({}, t.champs), destinataires: (t.destinataires || []).slice(), commentaire: '' };
+    const d = { etat: t.etat, agent: t.agent, typo: t.typo, sous: t.sous, motifStandby: t.motifStandby || null, champs: Object.assign({}, t.champs), destinataires: (t.destinataires || []).slice(), commentaire: '' };
     const ctx = { t, d, ferme, tente: false, groupesOuverts: {} };
     const peutReaffecter = !ferme && (estManager() || (t.agent && t.agent === moi()));
     const agents = Object.keys(PHX.EQUIPES).sort();
@@ -659,7 +772,10 @@
       (ferme ? '<p class="nc-note nc-note-verrou">Ticket fermé : lecture seule.</p>' : '') +
       '<div class="rp-grille">' +
       '<label for="rpEtat">État <span class="req" aria-hidden="true">*</span></label>' +
-      '<div class="rp-champ" data-champ="etat"><select id="rpEtat"></select> <a href="#" id="rpRegles" class="rp-lien-aide">Règles du workflow</a><div class="rp-aide" id="rpEtatAide"></div></div>' +
+      '<div class="rp-champ" data-champ="etat"><select id="rpEtat"></select> <a href="#" id="rpRegles" class="rp-lien-aide">Règles du workflow</a><div class="rp-aide" id="rpEtatAide"></div>' +
+      '<div class="rp-champ rp-standby" data-champ="motifStandby" id="rpStandby"' + (t.etat === 'STB' ? '' : ' hidden') + '><label for="rpMotifStb">Motif du stand-by <span class="req" aria-hidden="true">*</span></label>' +
+      '<select id="rpMotifStb"' + (ferme ? ' disabled' : '') + '><option value="">--Sélectionner--</option>' + PHX.MOTIFS_STANDBY.map((m) => '<option' + (m === t.motifStandby ? ' selected' : '') + '>' + esc(m) + '</option>').join('') + '</select>' +
+      '<div class="tk-err" data-err="motifStandby"></div></div></div>' +
       '<label for="rpAgent">Agent responsable</label>' +
       '<div class="rp-champ" data-champ="agent"><div class="rp-ligne"><select id="rpAgent"' + (peutReaffecter ? '' : ' disabled') + '>' + optAgents + '</select>' +
       (!t.agent && !ferme ? '<button type="button" class="nc-btn" id="rpPrendre">Prendre en charge</button>' : '') + '</div>' +
@@ -829,6 +945,8 @@
   function lireFormulaire(ctx) {
     const d = ctx.d;
     d.etat = $('#rpEtat').value;
+    d.motifStandby = d.etat === 'STB' ? ($('#rpMotifStb').value || null) : null;
+    $('#rpStandby').hidden = d.etat !== 'STB';
     d.agent = $('#rpAgent').value || null;
     d.typo = $('#rpTypo').value;
     d.sous = $('#rpSous').value;
@@ -901,6 +1019,7 @@
     const { t, d } = ctx;
     const ch = [];
     if (!egal(t.agent, d.agent)) ch.push({ code: 'agent', avant: t.agent, apres: d.agent });
+    if (!egal(t.motifStandby || null, d.motifStandby || null)) ch.push({ code: 'motifStandby', avant: t.motifStandby || null, apres: d.motifStandby || null });
     if (d.typo !== t.typo) ch.push({ code: 'typologie', avant: libTypo(t.typo), apres: libTypo(d.typo) });
     if (d.typo !== t.typo || d.sous !== t.sous) ch.push({ code: 'sousTypologie', avant: libSous(t.typo, t.sous), apres: libSous(d.typo, d.sous) });
     if (d.sous) champsDuBrouillon(d).forEach((c) => { if (autorise(c) && !egal(t.champs[c.code], d.champs[c.code])) ch.push({ code: c.code, avant: t.champs[c.code], apres: d.champs[c.code] }); });
@@ -913,6 +1032,7 @@
     const { t, d } = ctx;
     const err = {}, avert = [];
     if (d.etat !== t.etat && !d.commentaire) err.commentaire = 'Commentaire obligatoire pour un changement d’état.';
+    if (d.etat === 'STB' && !d.motifStandby) err.motifStandby = 'Motif obligatoire pour un ticket en stand-by.';
     if (!d.sous) err.sous = 'Choisissez une sous-typologie.';
     const c = d.champs;
     const vide = (x) => x === null || x === undefined || x === '';
@@ -1016,7 +1136,7 @@
     const { t, d } = ctx;
     const maintenant = Date.now();
     const etatAvant = t.etat;
-    t.agent = d.agent; t.typo = d.typo; t.sous = d.sous;
+    t.agent = d.agent; t.typo = d.typo; t.sous = d.sous; t.motifStandby = d.motifStandby || null;
     t.champs = Object.assign({}, t.champs, d.champs);
     t.destinataires = d.destinataires.slice();
     if (d.etat !== etatAvant) {
@@ -1048,6 +1168,7 @@
         '<li>Un ticket doit avoir un agent responsable pour changer d’état (RG-07).</li>' +
         '<li>Tout changement d’état demande un commentaire.</li>' +
         '<li>Seul un manager fait sortir un ticket de « Attente arbitrage ».</li>' +
+        '<li>« Stand-by » (toutes typologies) exige un motif : réclamation en cours ou panne en cours. Le motif est effacé quand le ticket quitte le stand-by ; l’historique en garde la trace.</li>' +
         '<li>Résolu ou Rejeté renseigne la date de résolution. Une réouverture (retour à Ouvert) l’efface ; l’historique garde la trace.</li>' +
         '<li>Réclamation › Facturation : « Avoir accordé » est obligatoire pour passer en Résolu ou Rejeté ; Rejeté impose « Non ».</li>' +
         '<li>Recouvrement : « Cause irrécouvrable » (compte clos, facture indue, liquidation judiciaire) est obligatoire pour passer en Rejeté ; le reste dû est alors compté irrécouvrable.</li>' +
@@ -1064,7 +1185,7 @@
   /* ---------- Conservation des mises à jour faites pendant la démo ---------- */
   function instantane(t) {
     return {
-      etat: t.etat, agent: t.agent, typo: t.typo, sous: t.sous, dateMaj: t.dateMaj, dateResolution: t.dateResolution,
+      etat: t.etat, agent: t.agent, typo: t.typo, sous: t.sous, motifStandby: t.motifStandby || null, dateMaj: t.dateMaj, dateResolution: t.dateResolution,
       dateFermeture: t.dateFermeture, decision: t.decision, dernierCommentaire: t.dernierCommentaire,
       champs: t.champs, destinataires: t.destinataires, ajouts: t.historique.filter((e) => e.saisie)
     };
@@ -1073,7 +1194,7 @@
     Object.keys(store.tickets).forEach((id) => {
       const t = PAR_ID[id], s = store.tickets[id];
       if (!t || !s || !PHX.etat(s.etat) || !PHX.sousTypo(s.typo, s.sous)) return;
-      ['etat', 'agent', 'typo', 'sous', 'dateMaj', 'dateResolution', 'dateFermeture', 'decision', 'dernierCommentaire'].forEach((k) => { if (k in s) t[k] = s[k]; });
+      ['etat', 'agent', 'typo', 'sous', 'motifStandby', 'dateMaj', 'dateResolution', 'dateFermeture', 'decision', 'dernierCommentaire'].forEach((k) => { if (k in s) t[k] = s[k]; });
       if (s.champs && typeof s.champs === 'object') t.champs = Object.assign({}, t.champs, s.champs);
       if (Array.isArray(s.destinataires)) t.destinataires = s.destinataires.filter((x) => typeof x === 'string');
       if (Array.isArray(s.ajouts)) t.historique = t.historique.concat(s.ajouts.filter((e) => e && e.type === 'maj'));
@@ -2330,7 +2451,7 @@
   const nbLien = (n, p) => n ? '<a href="' + lienListe(p) + '">' + n + '</a>' : '<span class="zero">0</span>';
 
   function compter(tickets) {
-    const c = { OUV: 0, ARP: 0, AAR: 0, RES: 0, REJ: 0, FER: 0, NA: 0, total: 0, dSom: 0, dNb: 0 };
+    const c = { OUV: 0, ARP: 0, AAR: 0, STB: 0, RES: 0, REJ: 0, FER: 0, NA: 0, total: 0, dSom: 0, dNb: 0 };
     tickets.forEach((t) => {
       c[t.etat]++; c.total++;
       if (t.etat === 'OUV' && !t.agent) c.NA++;
@@ -2415,7 +2536,7 @@
   /* ---------- Tickets par état et par sous-typologie ---------- */
   function matrice(base) {
     const cols = [
-      ['OUV', 'Ouvert'], ['NA', 'dont non affectés'], ['ARP', 'Attente retour partenaire'], ['AAR', 'Attente arbitrage'],
+      ['OUV', 'Ouvert'], ['NA', 'dont non affectés'], ['ARP', 'Attente retour partenaire'], ['AAR', 'Attente arbitrage'], ['STB', 'Stand-by'],
       ['RES', 'Résolu'], ['REJ', 'Rejeté'], ['FER', 'Fermé']
     ];
     const ligne = (lib, c, p, classe, bouton) => '<tr' + (classe ? ' class="' + classe + '"' : '') + '><td class="g">' + (bouton || esc(lib)) + '</td>' +
@@ -2571,27 +2692,27 @@
     const parAgent = {};
     actifs.forEach((t) => {
       if (!t.agent) return;
-      const a = parAgent[t.agent] = parAgent[t.agent] || { OUV: 0, ARP: 0, AAR: 0, total: 0 };
+      const a = parAgent[t.agent] = parAgent[t.agent] || { OUV: 0, ARP: 0, AAR: 0, STB: 0, total: 0 };
       a[t.etat]++; a.total++;
     });
     const na = actifs.filter((t) => !t.agent).length;
     const agents = Object.keys(parAgent).sort((x, y) => parAgent[y].total - parAgent[x].total || (x < y ? -1 : 1));
-    const lignes = (stats.f.agent ? '' : '<tr><td class="g"><span class="nc-non-affecte">Non affectés</span></td><td>' + nbLien(na, { etat: 'OUV', agent: '__NA__' }) + '</td><td></td><td></td><td class="sep"><b>' + nbLien(na, { etat: 'OUV', agent: '__NA__' }) + '</b></td></tr>') +
+    const lignes = (stats.f.agent ? '' : '<tr><td class="g"><span class="nc-non-affecte">Non affectés</span></td><td>' + nbLien(na, { etat: 'OUV', agent: '__NA__' }) + '</td><td></td><td></td><td></td><td class="sep"><b>' + nbLien(na, { etat: 'OUV', agent: '__NA__' }) + '</b></td></tr>') +
       agents.map((a) => {
         const c = parAgent[a];
         return '<tr><td class="g" title="' + esc(PHX.EQUIPES[a] || '') + '">' + esc(a) + '</td>' +
-          ['OUV', 'ARP', 'AAR'].map((k) => '<td>' + nbLien(c[k], { etat: k, agent: a }) + '</td>').join('') +
+          ['OUV', 'ARP', 'AAR', 'STB'].map((k) => '<td>' + nbLien(c[k], { etat: k, agent: a }) + '</td>').join('') +
           '<td class="sep"><b>' + nbLien(c.total, { etat: 'ACTIFS', agent: a }) + '</b></td></tr>';
       }).join('');
     // Ligne de total par état (non affectés compris dans « Ouvert »)
     const parEtat = (k) => actifs.filter((t) => t.etat === k).length;
     const total = actifs.length ? '<tr class="total"><td class="g">TOTAL</td>' +
-      ['OUV', 'ARP', 'AAR'].map((k) => '<td>' + nbLien(parEtat(k), { etat: k }) + '</td>').join('') +
+      ['OUV', 'ARP', 'AAR', 'STB'].map((k) => '<td>' + nbLien(parEtat(k), { etat: k }) + '</td>').join('') +
       '<td class="sep">' + nbLien(actifs.length, { etat: 'ACTIFS' }) + '</td></tr>' : '';
     return '<div><div class="st-wrap"><table class="st-table"><caption>Charge par agent (tickets en cours)</caption><thead><tr>' +
       '<th class="g" scope="col">Agent</th><th scope="col">Ouvert</th><th scope="col" title="Attente retour partenaire">Att. retour partenaire</th>' +
-      '<th scope="col" title="Attente arbitrage">Att. arbitrage</th><th scope="col" class="sep">Total</th></tr></thead><tbody>' +
-      (lignes || '<tr><td colspan="5">Aucun ticket en cours.</td></tr>') + total + '</tbody></table></div></div>';
+      '<th scope="col" title="Attente arbitrage">Att. arbitrage</th><th scope="col">Stand-by</th><th scope="col" class="sep">Total</th></tr></thead><tbody>' +
+      (lignes || '<tr><td colspan="6">Aucun ticket en cours.</td></tr>') + total + '</tbody></table></div></div>';
   }
 
   /* =====================================================================

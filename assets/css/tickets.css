@@ -92,6 +92,7 @@
 .etat-RES { background: var(--st-res); }
 .etat-REJ { background: var(--st-rej); }
 .etat-FER { background: var(--st-fer); }
+.etat-STB { background: #B03A6E; }
 
 /* Pagination façon GridView */
 .nc-pager { display: flex; gap: 4px; align-items: center; padding: 10px 0 0; flex-wrap: wrap; font-size: 12px; }
@@ -577,3 +578,28 @@ body.fp-page .nc-page { background: var(--nc-peche); }
 .st-liste td { font-size: 12px; height: auto; padding: 4px 6px; white-space: nowrap; }
 .st-liste td.g { white-space: normal; }
 .st-liste .etat { font-size: 10px; }
+
+/* ---------- Stand-by (fiche ticket) ---------- */
+.rp-standby { margin-top: 10px; }
+.rp-standby label { display: block; font-size: 12px; color: #444; margin-bottom: 3px; }
+
+/* ---------- Affectation en masse (liste des tickets) ---------- */
+.nc-grille th.col-select, .nc-grille td.col-select {
+  position: sticky; left: 0; z-index: 1; width: 34px; min-width: 34px; max-width: 34px; padding: 4px 6px; text-align: center;
+}
+.nc-grille th.col-select { z-index: 2; cursor: default; }
+.nc-grille th.col-select:hover { filter: none; }
+.nc-grille .col-select input { width: 16px; height: 16px; cursor: pointer; vertical-align: middle; }
+.nc-grille.avec-selection .col-ouvrir { left: 34px; }
+.ms-barre { margin-top: 14px; border: 1px solid orange; background: #F8F8F8; padding: 10px 12px; font-size: 13px; }
+.ms-barre h3 { margin: 0 0 6px; font-size: 14px; color: var(--nc-orange); }
+.ms-ligne { display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.ms-ligne label { font-weight: bold; color: #555; }
+.ms-ligne select { height: 26px; border: 1px solid #bbb; background: #fff; font-size: 12px; max-width: 230px; }
+.ms-ligne select:disabled { background: #eee; color: #888; }
+.ms-ligne .nc-btn-orange { margin-left: auto; }
+.ms-compte { font-weight: bold; color: #333; }
+.ms-lien { background: none; border: 0; padding: 0; color: var(--nc-lien); cursor: pointer; font: inherit; font-size: 12px; }
+.ms-lien:hover { text-decoration: underline; }
+.ms-barre .rp-aide { margin: 0; }
+@media print { .ms-barre, .col-select { display: none !important; } }

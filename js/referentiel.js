@@ -66,6 +66,7 @@
     { code: 'OUV', libelle: 'Ouvert', actif: true },
     { code: 'ARP', libelle: 'Attente retour partenaire', actif: true },
     { code: 'AAR', libelle: 'Attente arbitrage', actif: true },
+    { code: 'STB', libelle: 'Stand-by', actif: true },
     { code: 'RES', libelle: 'Résolu', tranche: true },
     { code: 'REJ', libelle: 'Rejeté', tranche: true },
     { code: 'FER', libelle: 'Fermé', tranche: true, clos: true }
@@ -76,12 +77,15 @@
    *  - un ticket doit avoir un agent responsable pour changer d'état ;
    *  - tout changement d'état exige un commentaire ;
    *  - seul un manager fait sortir un ticket de « Attente arbitrage » ;
-   *  - « Fermé » est définitif (lecture seule).
+   *  - « Fermé » est définitif (lecture seule) ;
+   *  - « Stand-by » exige un motif (toutes typologies et sous-typologies).
    */
+  PHX.MOTIFS_STANDBY = ['Réclamation en cours', 'Panne en cours'];
   PHX.TRANSITIONS = {
-    OUV: ['ARP', 'AAR', 'RES', 'REJ'],
-    ARP: ['OUV', 'AAR', 'RES', 'REJ'],
-    AAR: ['OUV', 'ARP', 'RES', 'REJ'],
+    OUV: ['ARP', 'AAR', 'STB', 'RES', 'REJ'],
+    ARP: ['OUV', 'AAR', 'STB', 'RES', 'REJ'],
+    AAR: ['OUV', 'ARP', 'STB', 'RES', 'REJ'],
+    STB: ['OUV', 'ARP', 'AAR', 'RES', 'REJ'],
     RES: ['FER', 'OUV'],
     REJ: ['FER', 'OUV'],
     FER: []
@@ -142,6 +146,7 @@
     { code: 'createur', libelle: 'Créé par', type: 'agent' },
     { code: 'boite', libelle: 'Boîte notifiée', type: 'texte' },
     { code: 'nbDM', libelle: 'Demandes de modification', type: 'nombre', aide: 'Nombre de demandes de modification rattachées' },
+    { code: 'motifStandby', creation: false, libelle: 'Motif du stand-by', type: 'texte', options: PHX.MOTIFS_STANDBY, aide: 'Renseigné quand le ticket est en Stand-by' },
 
     // Réclamation › Facturation (CDC § 4.3.1 + avoir accordé)
     { code: 'numFacture', libelle: 'N° de facture', type: 'texte', portee: { typo: 'REC', sous: ['FAC'] } },

@@ -419,6 +419,24 @@
         if (t.etat === 'FER') ev.push({ type: 'maj', date: t.dateFermeture, auteur: t.agent, etatAvant: t.decision, etatApres: 'FER', changements: [], commentaire: 'Ticket fermé après confirmation du partenaire.', notifies: notifies() });
       }
     }
+    // Stand-by : une partie des tickets en cours, suspendus par une réclamation ou une panne en cours
+    if (t.agent && (t.etat === 'OUV' || t.etat === 'ARP')) {
+      var rsb = mulberry32(PHX.hash('stb#' + t.id));
+      if (rsb() < 0.3) {
+        var motif = (t.typo === 'RCV' || t.typo === 'FAC' || (t.typo === 'REC' && t.sous === 'FAC')) ? 'Réclamation en cours'
+          : (t.typo === 'DEP' || (t.typo === 'REC' && (t.sous === 'SAV' || t.sous === 'DEP'))) ? 'Panne en cours'
+          : (rsb() < 0.5 ? 'Réclamation en cours' : 'Panne en cours');
+        ev.sort(function (a, b) { return a.date - b.date; });
+        var dern = ev[ev.length - 1].date;
+        var dsb = heureBureau(Math.min(dern + (2 + rsb() * 30) * H, fin), rsb, dern, fin);
+        if (dsb > dern) {
+          ev.push({ type: 'maj', date: dsb, auteur: t.agent, etatAvant: t.etat, etatApres: 'STB', changements: [{ code: 'motifStandby', avant: null, apres: motif }],
+            commentaire: motif === 'Panne en cours' ? 'Mise en stand-by : panne en cours, reprise du traitement après rétablissement.' : 'Mise en stand-by : une réclamation est en cours sur ce dossier.',
+            notifies: notifies() });
+          t.etat = 'STB'; t.motifStandby = motif;
+        }
+      }
+    }
     ev.sort(function (a, b) { return a.date - b.date; });
     var dernier = ev[ev.length - 1];
     t.dateMaj = dernier.date;

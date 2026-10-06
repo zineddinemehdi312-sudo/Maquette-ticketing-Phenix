@@ -61,12 +61,12 @@ Code partenaire, Partenaire (raison sociale).
 période de création.
 
 **Par défaut** : tickets en cours de traitement (Ouvert, Attente retour partenaire,
-Attente arbitrage), triés par date de création décroissante, 10 lignes par page
+Attente arbitrage, Stand-by), triés par date de création décroissante, 10 lignes par page
 (choix 10 / 100 / Tout). Toutes les colonnes sont triables.
 
 ### Accès au ticket : bouton « Ouvrir »
 
-- Chaque ligne commence par un bouton **Ouvrir**. Cette première colonne reste figée quand on fait défiler la liste horizontalement, pour que le bouton reste visible même avec beaucoup de colonnes ajoutées.
+- Chaque ligne commence par une case à cocher (affectation en masse) et un bouton **Ouvrir**. Ces deux colonnes restent figées quand on fait défiler la liste horizontalement, pour que le bouton reste visible même avec beaucoup de colonnes ajoutées.
 - Le **n° de ticket** est aussi un lien vers la fiche. Les deux sont de vrais liens : Ctrl+clic ou clic molette ouvre le ticket dans un nouvel onglet.
 - La colonne *Ouvrir* n'apparaît ni dans le sélecteur de colonnes ni dans l'export .csv.
 - Sur la fiche :
@@ -82,7 +82,7 @@ La fiche reprend l'organisation de la page Netcom, de haut en bas :
 2. **Liens** : *Afficher partenaire* et *Nouvelle demande de modification* (écrans des prochaines étapes).
 3. **Historique des échanges**, du plus ancien au plus récent. Le premier bloc présente l'ouverture : typologie, objet, description et boîte fonctionnelle notifiée. Chaque bloc suivant présente une mise à jour : changement d'état, champs modifiés avec ancienne et nouvelle valeur, commentaire, destinataires notifiés. Cet historique constitue le journal CRM demandé par le CDC (§ 4.4, § 4.5.2, RG-14).
 4. **Bloc « Ticket N° »**, au-dessus du commentaire. C'est ici que les paramètres Phenix remplacent les champs Netcom (État, Statut traitement, Facturé, Montant…) :
-   - État (workflow à 6 états) et Agent responsable, avec un bouton *Prendre en charge* quand le ticket n'est pas affecté ;
+   - État (workflow à 7 états, avec le motif quand le ticket passe en Stand-by) et Agent responsable, avec un bouton *Prendre en charge* quand le ticket n'est pas affecté ;
    - Typologie et Sous-typologie, modifiables par un manager ;
    - informations du ticket en lecture (partenaire, créateur, dates, boîte notifiée, demandes de modification) ;
    - **champs spécifiques de la typologie, générés depuis le référentiel des champs**. Un champ ajouté au référentiel apparaît ici comme dans la liste, sans développement d'écran.
@@ -108,7 +108,8 @@ Correspondance avec la page Netcom :
 **Contrôles à l'enregistrement** (bouton *Règles du workflow* sur la fiche) :
 
 - **Workflow**
-  - Transitions : Ouvert ↔ Attente retour partenaire ↔ Attente arbitrage, puis Résolu ou Rejeté, puis Fermé. Une réouverture vers Ouvert est possible depuis Résolu ou Rejeté.
+  - Transitions : Ouvert, Attente retour partenaire, Attente arbitrage et Stand-by communiquent entre eux, puis Résolu ou Rejeté, puis Fermé. Une réouverture vers Ouvert est possible depuis Résolu ou Rejeté.
+  - Stand-by : motif obligatoire (réclamation en cours, panne en cours).
   - Un agent responsable est nécessaire pour changer d'état (RG-07).
   - Tout changement d'état demande un commentaire.
   - Seul un manager fait sortir un ticket de *Attente arbitrage*.
@@ -135,6 +136,25 @@ Correspondance avec la page Netcom :
 
 Ces règles sont des **propositions à valider** ; les transitions sont paramétrées dans `js/referentiel.js` (`PHX.TRANSITIONS`).
 
+### Affectation en masse
+
+Sur la liste *Afficher les tickets*, chaque ligne commence par une case à cocher ; celle de l'en-tête sélectionne la page. La sélection est conservée d'une page à l'autre et vidée quand les filtres changent.
+
+Sous la liste, la barre **Affectation en masse** propose trois listes déroulantes (Typologie, Sous-typologie, Agent) et le bouton **Affecter la sélection** :
+
+- une fenêtre de confirmation récapitule les choix, les tickets qui seront modifiés et ceux qui seront ignorés, avec la raison ;
+- chaque ticket modifié reçoit une entrée « Affectation en masse » dans son historique, et le nouvel agent est notifié ;
+- une typologie choisie impose une sous-typologie ; les champs spécifiques de la nouvelle typologie restent à compléter sur chaque fiche.
+
+Règles par profil, cohérentes avec la fiche ticket :
+
+| Profil | Possibilités |
+|---|---|
+| Manager | Requalification (typologie, sous-typologie) et affectation à n'importe quel agent |
+| Agent | Prise en charge en masse : il s'affecte lui-même les tickets non affectés ; les tickets déjà affectés à un autre agent sont ignorés |
+
+Les tickets fermés sont toujours ignorés.
+
 ### Colonnes personnalisées (principe Redmine)
 
 Le bouton **Colonnes…** ouvre deux listes : colonnes disponibles et colonnes affichées.
@@ -149,7 +169,7 @@ Exemples de colonnes disponibles :
 
 | Groupe | Colonnes |
 |---|---|
-| Informations générales | Typologie, Sous-typologie, Objet, Créé par, Boîte notifiée, Demandes de modification |
+| Informations générales | Typologie, Sous-typologie, Objet, Créé par, Boîte notifiée, Demandes de modification, Motif du stand-by |
 | Réclamation › Facturation | N° de facture, Avoir demandé, Montant réclamé HT, **Avoir accordé**, **Montant avoir HT** |
 | Réclamation › SAV / Déploiement | **Services impactés** : Fixe, DATA, GSM, Autre (choix multiple) |
 | Réclamation (toutes sous-typologies) | **Geste co accordé**, **Montant geste co HT** |
@@ -186,18 +206,19 @@ Exemples de colonnes disponibles :
 
 Les montants sont masqués pour les profils non habilités (RG-15).
 
-### Workflow : 6 états
+### Workflow : 7 états
 
 | État | Signification |
 |---|---|
 | Ouvert | Ticket créé, pris en charge ou en attente de prise en charge |
 | Attente retour partenaire | En attente d'éléments du partenaire. Au lot 1, l'agent repasse lui-même le ticket en Ouvert à réception |
 | Attente arbitrage | Décision à valider par le manager (ex. montant d'avoir, échéancier) |
+| Stand-by | Traitement suspendu, toutes typologies et sous-typologies. Motif obligatoire : *Réclamation en cours* ou *Panne en cours* |
 | Résolu | Décision rendue en faveur du partenaire ou traitement effectué |
 | Rejeté | Demande non fondée ou non recevable |
 | Fermé | Clôture définitive, lecture seule |
 
-Les transitions autorisées seront décrites avec la fiche ticket (étape suivante).
+Le stand-by est un état « en cours » : il apparaît dans le filtre *En cours de traitement*, dans la charge par agent et dans le reliquat des statistiques. Le motif est disponible en colonne personnalisée (*Motif du stand-by*) ; il est effacé quand le ticket quitte le stand-by, l'historique en gardant la trace.
 
 ### Création de ticket (modèle « Réception tickets » de Netcom, CDC § 4.1 et § 7.1)
 
