@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CRM NETCOM - TICKETS PHENIX (maquette lot 1)</title>
+<link rel="stylesheet" href="assets/css/netcom-shell.css">
+<link rel="stylesheet" href="assets/css/tickets.css">
+</head>
+<body>
+
+<header class="nc-top">
+  <a class="nc-logo" href="#/menu" title="Accueil Tickets"><img src="assets/img/logo.png" alt="CRM Netcom Group"></a>
+  <nav class="nc-raccourcis" aria-label="Raccourcis">
+    <a href="#" data-hors-maquette title="Mon profil"><img src="assets/img/profil.png" alt="Mon profil"></a>
+    <a href="#" data-hors-maquette title="Déconnexion"><img src="assets/img/logout.png" alt="Déconnexion"></a>
+    <a href="#" data-hors-maquette title="Netcom Phone"><img src="assets/img/netcom_phone.png" alt="Netcom Phone"></a>
+  </nav>
+  <div class="nc-espace"></div>
+  <div class="nc-mdp">Date d'expiration de<br>mot de passe :<br>31/12/2026</div>
+  <div class="nc-identite">
+    <img src="assets/img/defaut_homme.png" alt="">
+    <div>
+      <i>Connecté(e) en tant que :</i>
+      <b id="idNom">A.MARTIN</b>
+      <i id="idGroupe">SERVICE CLIENT R&amp;F</i>
+    </div>
+  </div>
+</header>
+
+<div class="nc-barre">
+  <div class="nc-menu-rapide">
+    <button type="button" id="btnMenuRapide" aria-expanded="false" aria-controls="menuRapide">MENU RAPIDE <span aria-hidden="true">&#9660;</span></button>
+    <ul class="nc-menu-liste" id="menuRapide" hidden>
+      <li><a href="#" data-hors-maquette><img src="assets/img/facturation.png" alt=""> Facturation</a></li>
+      <li><a href="#" data-hors-maquette data-msg="La liste des partenaires est hors maquette : ouvrez une fiche depuis le code partenaire d’un ticket ou d’une demande."><img src="assets/img/partenaires.png" alt=""> Partenaires</a></li>
+      <li><a href="#/menu" aria-current="page"><img src="assets/img/tickets.png" alt=""> Tickets</a></li>
+      <li><a href="#" data-hors-maquette><img src="assets/img/projets.png" alt=""> Gérer les Projets</a></li>
+      <li><a href="#" data-hors-maquette><img src="assets/img/commandes-sim.png" alt=""> Commandes SIM</a></li>
+    </ul>
+  </div>
+  <nav class="nc-ariane" id="ariane" aria-label="Fil d'Ariane"></nav>
+</div>
+
+<div class="nc-bandeau"><img src="assets/img/gestion-partenaires.png" alt=""> Gestion Partenaires</div>
+
+<main class="nc-page" id="page"></main>
+
+<button type="button" class="sim-bouton" id="btnSim" aria-controls="simPanneau" aria-expanded="false">Simulation</button>
+<aside class="sim-panneau" id="simPanneau" hidden aria-label="Panneau de simulation"></aside>
+<div class="nc-toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="js/referentiel.js"></script>
+<script src="js/donnees-demo.js"></script>
+<script src="js/fichiers-demo.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
