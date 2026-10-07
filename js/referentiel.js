@@ -24,7 +24,8 @@
       ]
     },
     {
-      code: 'DEP', libelle: 'Déploiement',
+      // objets : l'objet se choisit dans cette liste à la création (au lieu d'un texte libre)
+      code: 'DEP', libelle: 'Déploiement', objets: ['Accès API', 'Onboarding / Formation', 'Autre'],
       sous: [
         { code: 'DATA', libelle: 'DATA', boite: 'delivery@phenix-partner.fr' },
         { code: 'VOIP', libelle: 'VOIP', boite: 'delivery@phenix-partner.fr' },
@@ -35,7 +36,7 @@
       code: 'FAC', libelle: 'Facturation',
       sous: [
         { code: 'EDI', libelle: 'Édition factures divers', boite: 'facturation@phenix-partner.fr' },
-        { code: 'AVO', libelle: 'Avoir', boite: 'facturation@phenix-partner.fr' }
+        { code: 'AVO', libelle: 'Annulation facture', boite: 'facturation@phenix-partner.fr' }
       ]
     },
     {
@@ -59,7 +60,10 @@
     }
   ];
 
-  /* ---------- Workflow : 6 états ---------- */
+  /* ---------- Pièces jointes : formats acceptés et taille maximale (proposition) ---------- */
+  PHX.PIECES_JOINTES = { extensions: ['pdf', 'xlsx'], tailleMax: 10 * 1024 * 1024 };
+
+  /* ---------- Workflow ---------- */
   // actif : le ticket est en cours de traitement (filtre par défaut de la liste)
   // tranche : une décision a été rendue (date de résolution renseignée)
   PHX.ETATS = [

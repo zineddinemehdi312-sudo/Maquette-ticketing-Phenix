@@ -57,23 +57,16 @@
       'Contestation des conditions de résiliation du contrat cadre', 'Délai de réponse du support jugé excessif',
       'Demande d\u2019explication sur l\u2019évolution tarifaire'
     ],
-    'DEP/DATA': [
-      'Suspension temporaire du lien DATA', 'Résiliation manuelle d\u2019un accès SDSL',
-      'Communication des identifiants suite déploiement', 'Changement de débit du lien fibre'
-    ],
-    'DEP/VOIP': [
-      'Création d\u2019un trunk SIP', 'Ajout de {n} SDA', 'Paramétrage des renvois d\u2019appels', 'Mise à jour de l\u2019annuaire du standard'
-    ],
-    'DEP/GSM': [
-      'Activation de {n} lignes GSM', 'Commande de cartes SIM de remplacement',
-      'Changement de forfait sur {n} lignes', 'Portabilité entrante de {n} numéros mobiles'
-    ],
+    // Déploiement : l'objet est choisi dans une liste (référentiel PHX.TYPOLOGIES, « objets »)
+    'DEP/DATA': ['Accès API', 'Onboarding / Formation', 'Autre', 'Accès API'],
+    'DEP/VOIP': ['Accès API', 'Onboarding / Formation', 'Autre', 'Onboarding / Formation'],
+    'DEP/GSM': ['Onboarding / Formation', 'Accès API', 'Autre', 'Onboarding / Formation'],
     'FAC/EDI': [
       'Réédition de la facture {mois}', 'Duplicata de facture demandé par le partenaire',
       'Édition du relevé de compte annuel', 'Facture à rééditer avec la nouvelle adresse de facturation'
     ],
     'FAC/AVO': [
-      'Émission d\u2019un avoir suite à réclamation', 'Avoir sur frais de mise en service', 'Avoir commercial sur la facture {mois}'
+      'Annulation de la facture {mois}', 'Annulation des frais de mise en service facturés', 'Annulation de facture suite à réclamation'
     ],
     'RCV/IMP': [
       'Facture {mois} échue non réglée', 'Relance impayé – 2e niveau', 'Plusieurs factures échues non réglées'
@@ -324,7 +317,7 @@
       case 'REC/DEP': return 'Réclamation sur une opération de déploiement : ' + o + '.';
       case 'REC/AUT': return 'Réclamation du partenaire : ' + o + '. Détails transmis par e-mail.';
       case 'FAC/EDI': return 'Demande d\u2019édition : ' + o + '.';
-      case 'FAC/AVO': return 'Demande d\u2019émission d\u2019avoir : ' + o + '.';
+      case 'FAC/AVO': return 'Demande d\u2019annulation de facture : ' + o + '.';
       case 'RCV/IMP': return 'Facture ' + c.numFactureImpayee + ' échue le ' + fDate(c.dateEcheance) + ', non réglée à ce jour.';
       case 'RCV/REJ': return 'Prélèvement rejeté le ' + fDate(c.dateRejet) + ' (' + minuscule(c.motifRejet) + ').';
       default: return 'Demande du partenaire : ' + o + '.';
@@ -418,6 +411,18 @@
         ev.push({ type: 'maj', date: dr, auteur: t.agent, etatAvant: 'OUV', etatApres: t.decision, changements: ch, commentaire: commentaireDecision(t), notifies: notifies() });
         if (t.etat === 'FER') ev.push({ type: 'maj', date: t.dateFermeture, auteur: t.agent, etatAvant: t.decision, etatApres: 'FER', changements: [], commentaire: 'Ticket fermé après confirmation du partenaire.', notifies: notifies() });
       }
+    }
+    // Pièces jointes fictives (téléchargeables : fichiers de démonstration PHX.FICHIERS_DEMO)
+    var rp = mulberry32(PHX.hash('pj#' + t.id));
+    var pj = function (nom, type) { return { id: 'demo-' + t.id + '-' + nom, nom: nom, type: type, taille: type === 'pdf' ? 775 : 5195, demo: true }; };
+    var k = t.typo + '/' + t.sous;
+    if (k === 'REC/FAC' && rp() < 0.5) ev[0].fichiers = [pj('Facture_' + String(t.champs.numFacture).split(',')[0] + '.pdf', 'pdf')].concat(rp() < 0.4 ? [pj('Detail_lignes_contestees.xlsx', 'xlsx')] : []);
+    else if (t.typo === 'RCV' && rp() < 0.4) ev[0].fichiers = [pj(t.sous === 'IMP' ? 'Relance_impaye_' + t.champs.numFactureImpayee + '.pdf' : 'Avis_rejet_prelevement.pdf', 'pdf')];
+    else if (t.typo === 'ADV' && rp() < 0.5) ev[0].fichiers = [pj('Bon_de_commande.pdf', 'pdf'), pj('Liste_des_lignes.xlsx', 'xlsx')];
+    else if (t.typo === 'DEP' && rp() < 0.3) ev[0].fichiers = [pj('Parametrage_' + t.sous + '.xlsx', 'xlsx')];
+    if (k === 'REC/FAC' && t.champs.avoirAccorde && ev.length > 2 && rp() < 0.5) {
+      var dec = ev.filter(function (e) { return e.etatApres === t.decision && e.etatAvant !== e.etatApres; })[0];
+      if (dec) dec.fichiers = [pj('Calcul_avoir_ticket_' + t.id + '.xlsx', 'xlsx')];
     }
     // Stand-by : une partie des tickets en cours, suspendus par une réclamation ou une panne en cours
     if (t.agent && (t.etat === 'OUV' || t.etat === 'ARP')) {

@@ -763,6 +763,23 @@ body.fp-page .nc-page { background: var(--nc-peche); }
 .ms-barre .rp-aide { margin: 0; }
 @media print { .ms-barre, .col-select { display: none !important; } }
 
+/* ---------- Pièces jointes ---------- */
+.pj-zone { margin-top: 10px; font-size: 13px; }
+.pj-zone label small { color: #777; font-weight: normal; }
+.pj-zone input[type="file"] { margin-left: 6px; font-size: 12px; }
+.pj-choisis { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.pj-choisis li { display: inline-flex; align-items: center; gap: 4px; background: #fff; border: 1px solid #e3b98a; border-radius: 12px; padding: 1px 4px 1px 6px; font-size: 12px; }
+.pj-choisis small { color: #888; }
+.pj-choisis button { border: 0; background: none; color: #B03A2E; cursor: pointer; font-size: 15px; line-height: 1; padding: 0 4px; }
+.pj-zone .tk-err { display: block; margin-top: 4px; }
+.pj-ico { display: inline-block; min-width: 30px; margin-right: 5px; padding: 0 3px; border-radius: 2px; color: #fff; font: bold 9px/14px Arial, sans-serif; text-align: center; vertical-align: 1px; }
+.pj-pdf { background: #C0392B; }
+.pj-xlsx { background: #1D6F42; }
+.pj-lien { white-space: nowrap; margin-right: 10px; }
+.pj-section { margin-top: 16px; }
+.pj-table td { white-space: nowrap; }
+.ct-pj { padding: 0 6px; }
+
 </style>
 </head>
 <body>
@@ -835,7 +852,8 @@ body.fp-page .nc-page { background: var(--nc-peche); }
       ]
     },
     {
-      code: 'DEP', libelle: 'Déploiement',
+      // objets : l'objet se choisit dans cette liste à la création (au lieu d'un texte libre)
+      code: 'DEP', libelle: 'Déploiement', objets: ['Accès API', 'Onboarding / Formation', 'Autre'],
       sous: [
         { code: 'DATA', libelle: 'DATA', boite: 'delivery@phenix-partner.fr' },
         { code: 'VOIP', libelle: 'VOIP', boite: 'delivery@phenix-partner.fr' },
@@ -846,7 +864,7 @@ body.fp-page .nc-page { background: var(--nc-peche); }
       code: 'FAC', libelle: 'Facturation',
       sous: [
         { code: 'EDI', libelle: 'Édition factures divers', boite: 'facturation@phenix-partner.fr' },
-        { code: 'AVO', libelle: 'Avoir', boite: 'facturation@phenix-partner.fr' }
+        { code: 'AVO', libelle: 'Annulation facture', boite: 'facturation@phenix-partner.fr' }
       ]
     },
     {
@@ -870,7 +888,10 @@ body.fp-page .nc-page { background: var(--nc-peche); }
     }
   ];
 
-  /* ---------- Workflow : 6 états ---------- */
+  /* ---------- Pièces jointes : formats acceptés et taille maximale (proposition) ---------- */
+  PHX.PIECES_JOINTES = { extensions: ['pdf', 'xlsx'], tailleMax: 10 * 1024 * 1024 };
+
+  /* ---------- Workflow ---------- */
   // actif : le ticket est en cours de traitement (filtre par défaut de la liste)
   // tranche : une décision a été rendue (date de résolution renseignée)
   PHX.ETATS = [
@@ -1143,23 +1164,16 @@ body.fp-page .nc-page { background: var(--nc-peche); }
       'Contestation des conditions de résiliation du contrat cadre', 'Délai de réponse du support jugé excessif',
       'Demande d\u2019explication sur l\u2019évolution tarifaire'
     ],
-    'DEP/DATA': [
-      'Suspension temporaire du lien DATA', 'Résiliation manuelle d\u2019un accès SDSL',
-      'Communication des identifiants suite déploiement', 'Changement de débit du lien fibre'
-    ],
-    'DEP/VOIP': [
-      'Création d\u2019un trunk SIP', 'Ajout de {n} SDA', 'Paramétrage des renvois d\u2019appels', 'Mise à jour de l\u2019annuaire du standard'
-    ],
-    'DEP/GSM': [
-      'Activation de {n} lignes GSM', 'Commande de cartes SIM de remplacement',
-      'Changement de forfait sur {n} lignes', 'Portabilité entrante de {n} numéros mobiles'
-    ],
+    // Déploiement : l'objet est choisi dans une liste (référentiel PHX.TYPOLOGIES, « objets »)
+    'DEP/DATA': ['Accès API', 'Onboarding / Formation', 'Autre', 'Accès API'],
+    'DEP/VOIP': ['Accès API', 'Onboarding / Formation', 'Autre', 'Onboarding / Formation'],
+    'DEP/GSM': ['Onboarding / Formation', 'Accès API', 'Autre', 'Onboarding / Formation'],
     'FAC/EDI': [
       'Réédition de la facture {mois}', 'Duplicata de facture demandé par le partenaire',
       'Édition du relevé de compte annuel', 'Facture à rééditer avec la nouvelle adresse de facturation'
     ],
     'FAC/AVO': [
-      'Émission d\u2019un avoir suite à réclamation', 'Avoir sur frais de mise en service', 'Avoir commercial sur la facture {mois}'
+      'Annulation de la facture {mois}', 'Annulation des frais de mise en service facturés', 'Annulation de facture suite à réclamation'
     ],
     'RCV/IMP': [
       'Facture {mois} échue non réglée', 'Relance impayé – 2e niveau', 'Plusieurs factures échues non réglées'
@@ -1410,7 +1424,7 @@ body.fp-page .nc-page { background: var(--nc-peche); }
       case 'REC/DEP': return 'Réclamation sur une opération de déploiement : ' + o + '.';
       case 'REC/AUT': return 'Réclamation du partenaire : ' + o + '. Détails transmis par e-mail.';
       case 'FAC/EDI': return 'Demande d\u2019édition : ' + o + '.';
-      case 'FAC/AVO': return 'Demande d\u2019émission d\u2019avoir : ' + o + '.';
+      case 'FAC/AVO': return 'Demande d\u2019annulation de facture : ' + o + '.';
       case 'RCV/IMP': return 'Facture ' + c.numFactureImpayee + ' échue le ' + fDate(c.dateEcheance) + ', non réglée à ce jour.';
       case 'RCV/REJ': return 'Prélèvement rejeté le ' + fDate(c.dateRejet) + ' (' + minuscule(c.motifRejet) + ').';
       default: return 'Demande du partenaire : ' + o + '.';
@@ -1504,6 +1518,18 @@ body.fp-page .nc-page { background: var(--nc-peche); }
         ev.push({ type: 'maj', date: dr, auteur: t.agent, etatAvant: 'OUV', etatApres: t.decision, changements: ch, commentaire: commentaireDecision(t), notifies: notifies() });
         if (t.etat === 'FER') ev.push({ type: 'maj', date: t.dateFermeture, auteur: t.agent, etatAvant: t.decision, etatApres: 'FER', changements: [], commentaire: 'Ticket fermé après confirmation du partenaire.', notifies: notifies() });
       }
+    }
+    // Pièces jointes fictives (téléchargeables : fichiers de démonstration PHX.FICHIERS_DEMO)
+    var rp = mulberry32(PHX.hash('pj#' + t.id));
+    var pj = function (nom, type) { return { id: 'demo-' + t.id + '-' + nom, nom: nom, type: type, taille: type === 'pdf' ? 775 : 5195, demo: true }; };
+    var k = t.typo + '/' + t.sous;
+    if (k === 'REC/FAC' && rp() < 0.5) ev[0].fichiers = [pj('Facture_' + String(t.champs.numFacture).split(',')[0] + '.pdf', 'pdf')].concat(rp() < 0.4 ? [pj('Detail_lignes_contestees.xlsx', 'xlsx')] : []);
+    else if (t.typo === 'RCV' && rp() < 0.4) ev[0].fichiers = [pj(t.sous === 'IMP' ? 'Relance_impaye_' + t.champs.numFactureImpayee + '.pdf' : 'Avis_rejet_prelevement.pdf', 'pdf')];
+    else if (t.typo === 'ADV' && rp() < 0.5) ev[0].fichiers = [pj('Bon_de_commande.pdf', 'pdf'), pj('Liste_des_lignes.xlsx', 'xlsx')];
+    else if (t.typo === 'DEP' && rp() < 0.3) ev[0].fichiers = [pj('Parametrage_' + t.sous + '.xlsx', 'xlsx')];
+    if (k === 'REC/FAC' && t.champs.avoirAccorde && ev.length > 2 && rp() < 0.5) {
+      var dec = ev.filter(function (e) { return e.etatApres === t.decision && e.etatAvant !== e.etatApres; })[0];
+      if (dec) dec.fichiers = [pj('Calcul_avoir_ticket_' + t.id + '.xlsx', 'xlsx')];
     }
     // Stand-by : une partie des tickets en cours, suspendus par une réclamation ou une panne en cours
     if (t.agent && (t.etat === 'OUV' || t.etat === 'ARP')) {
@@ -1667,6 +1693,17 @@ body.fp-page .nc-page { background: var(--nc-peche); }
       case 'date': return t.dateCreation + Math.floor(r() * 20) * JOUR;
       default: return 'REF-' + String(1000 + Math.floor(r() * 8999));
     }
+  };
+})();
+
+</script>
+<script>
+/* Fichiers de démonstration (fictifs) téléchargés depuis les pièces jointes générées */
+(function () {
+  window.PHX = window.PHX || {};
+  window.PHX.FICHIERS_DEMO = {
+    pdf: 'JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCA1OTUgODQyXSAvQ29udGVudHMgNCAwIFIgL1Jlc291cmNlcyA8PCAvRm9udCA8PCAvRjEgNSAwIFIgPj4gPj4gPj4KZW5kb2JqCjQgMCBvYmoKPDwgL0xlbmd0aCAyMzEgPj4Kc3RyZWFtCkJUIC9GMSAxNiBUZiA2MCA3NjAgVGQgKFBoZW5peCAtIE1vZHVsZSBUaWNrZXRzKSBUaiBFVApCVCAvRjEgMTEgVGYgNjAgNzMwIFRkIChQaWVjZSBqb2ludGUgZGUgZGVtb25zdHJhdGlvbiAoZmljaGllciBmaWN0aWYpKSBUaiBFVApCVCAvRjEgMTEgVGYgNjAgNzEyIFRkIChNYXF1ZXR0ZSBsb3QgMSA6IGNlIGRvY3VtZW50IGlsbHVzdHJlIHVuIFBERiBkZXBvc2Ugc3VyIHVuIHRpY2tldC4pIFRqIEVUCmVuZHN0cmVhbQplbmRvYmoKNSAwIG9iago8PCAvVHlwZSAvRm9udCAvU3VidHlwZSAvVHlwZTEgL0Jhc2VGb250IC9IZWx2ZXRpY2EgPj4KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAwOSAwMDAwMCBuIAowMDAwMDAwMDU4IDAwMDAwIG4gCjAwMDAwMDAxMTUgMDAwMDAgbiAKMDAwMDAwMDI0MSAwMDAwMCBuIAowMDAwMDAwNTIyIDAwMDAwIG4gCnRyYWlsZXIKPDwgL1NpemUgNiAvUm9vdCAxIDAgUiA+PgpzdGFydHhyZWYKNTkyCiUlRU9GCg==',
+    xlsx: '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'
   };
 })();
 
@@ -2327,6 +2364,120 @@ body.fp-page .nc-page { background: var(--nc-peche); }
     toast(pluriel(plan.length, 'ticket') + ' mis à jour : historique complété et notifications envoyées (simulation).');
   }
 
+
+  /* ---------- Pièces jointes (xlsx, pdf) : dépôt à la création et à chaque mise à jour ----------
+   * Dans la maquette, le contenu des fichiers reste dans le navigateur (IndexedDB) ;
+   * les métadonnées (nom, type, taille) sont inscrites dans l'historique du ticket. */
+  const PJ_META = {};
+  const PJ = (() => {
+    const memoire = {};
+    let dbp = null;
+    const ouvrir = () => dbp || (dbp = new Promise((res) => {
+      try {
+        const r = indexedDB.open('phenix-tickets-pj', 1);
+        r.onupgradeneeded = () => r.result.createObjectStore('fichiers');
+        r.onsuccess = () => res(r.result);
+        r.onerror = () => res(null);
+      } catch (e) { res(null); }
+    }));
+    const transaction = (mode, action) => ouvrir().then((db) => new Promise((res) => {
+      if (!db) { res(null); return; }
+      try {
+        const tx = db.transaction('fichiers', mode);
+        const rq = action(tx.objectStore('fichiers'));
+        tx.oncomplete = () => res(rq && rq.result !== undefined ? rq.result : null);
+        tx.onerror = () => res(null);
+      } catch (e) { res(null); }
+    }));
+    return {
+      mettre: (id, blob) => { memoire[id] = blob; return transaction('readwrite', (st) => st.put(blob, id)); },
+      lire: (id) => (memoire[id] ? Promise.resolve(memoire[id]) : transaction('readonly', (st) => st.get(id))),
+      vider: () => { Object.keys(memoire).forEach((k) => { delete memoire[k]; }); return transaction('readwrite', (st) => st.clear()); }
+    };
+  })();
+  const extPJ = (nom) => { const m = /\.([a-z0-9]+)$/i.exec(nom || ''); return m ? m[1].toLowerCase() : ''; };
+  const tailleLisible = (o) => (o < 1024 ? o + ' o' : o < 1048576 ? fmtNb.format(o / 1024) + ' Ko' : fmtNb.format(o / 1048576) + ' Mo');
+  const iconePJ = (type) => '<span class="pj-ico pj-' + esc(type) + '" aria-hidden="true">' + esc(type.toUpperCase()) + '</span>';
+  function lienPJ(f) {
+    PJ_META[f.id] = f;
+    return '<a href="#" class="pj-lien" data-pj="' + esc(f.id) + '" title="Télécharger ' + esc(f.nom) + ' (' + tailleLisible(f.taille) + ')">' + iconePJ(f.type) + esc(f.nom) + '</a>';
+  }
+  function zonePJ(prefixe) {
+    const P = PHX.PIECES_JOINTES;
+    return '<div class="pj-zone"><label for="' + prefixe + 'Pj"><b>Pièces jointes</b> <small>(' + P.extensions.join(', ') + ' ; ' + tailleLisible(P.tailleMax) + ' maximum par fichier)</small></label> ' +
+      '<input type="file" id="' + prefixe + 'Pj" multiple accept=".pdf,.xlsx,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">' +
+      '<ul class="pj-choisis" id="' + prefixe + 'PjListe"></ul><div class="tk-err" id="' + prefixe + 'PjErr"></div></div>';
+  }
+  function brancherPJ(prefixe, fichiers, apres) {
+    const input = $('#' + prefixe + 'Pj'), listeEl = $('#' + prefixe + 'PjListe'), err = $('#' + prefixe + 'PjErr');
+    const P = PHX.PIECES_JOINTES;
+    const rendre = () => {
+      listeEl.innerHTML = fichiers.map((f, i) => '<li>' + iconePJ(extPJ(f.name)) + esc(f.name) + ' <small>' + tailleLisible(f.size) + '</small>' +
+        '<button type="button" data-retirer-pj="' + i + '" aria-label="Retirer ' + esc(f.name) + '">×</button></li>').join('');
+    };
+    input.addEventListener('change', () => {
+      const refus = [];
+      Array.prototype.forEach.call(input.files, (f) => {
+        if (P.extensions.indexOf(extPJ(f.name)) < 0) refus.push(f.name + ' : format non accepté');
+        else if (!f.size) refus.push(f.name + ' : fichier vide');
+        else if (f.size > P.tailleMax) refus.push(f.name + ' : plus de ' + tailleLisible(P.tailleMax));
+        else fichiers.push(f);
+      });
+      err.textContent = refus.length ? 'Refusé : ' + refus.join(' ; ') + '. Formats acceptés : xlsx et pdf.' : '';
+      input.value = '';
+      rendre(); apres();
+    });
+    listeEl.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-retirer-pj]');
+      if (!b) return;
+      fichiers.splice(+b.getAttribute('data-retirer-pj'), 1);
+      rendre(); apres();
+    });
+    rendre();
+  }
+  function enregistrerPJ(fichiers) {
+    return fichiers.map((f, i) => {
+      const meta = { id: 'pj-' + Date.now().toString(36) + '-' + i + '-' + Math.random().toString(36).slice(2, 7), nom: f.name, type: extPJ(f.name), taille: f.size };
+      PJ.mettre(meta.id, f);
+      return meta;
+    });
+  }
+  function blobDemo(type) {
+    const bin = atob(PHX.FICHIERS_DEMO[type]);
+    const u = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+    return new Blob([u], { type: type === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  }
+  async function telechargerPJ(id) {
+    const f = PJ_META[id];
+    if (!f) return;
+    const blob = f.demo ? blobDemo(f.type) : await PJ.lire(f.id);
+    if (!blob) { toast('Fichier indisponible ici : dans la maquette, le contenu des fichiers reste dans le navigateur où ils ont été déposés.'); return; }
+    const dl = await capaciteTelechargement();
+    if (dl) {
+      try { await dl.save({ filename: f.nom, data: blob }); } catch (err) { if (!err || err.code !== 'declined') toast('Le téléchargement n’est pas disponible dans cette vue.'); }
+      return;
+    }
+    if (dl === null) { toast('Le téléchargement n’est pas disponible dans cette vue.'); return; }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = f.nom;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+  }
+  // Section « Fichiers uploadés » en bas de la fiche ticket (du plus récent au plus ancien)
+  function sectionFichiers(t) {
+    const lignes = [];
+    t.historique.forEach((e) => (e.fichiers || []).forEach((f) => lignes.push({ f, e })));
+    lignes.sort((a, b) => b.e.date - a.e.date);
+    return '<section class="rp-panneau pj-section" aria-labelledby="pjTitre"><h3 class="rp-panneau-tete" id="pjTitre">Fichiers uploadés (' + lignes.length + ')</h3><div class="rp-panneau-corps">' +
+      (lignes.length ? '<div class="st-wrap"><table class="nc-grille dm-gv pj-table"><thead><tr><th scope="col">Fichier</th><th scope="col">Taille</th><th scope="col">Déposé le</th><th scope="col">Par</th><th scope="col">Origine</th></tr></thead><tbody>' +
+        lignes.map(({ f, e }) => '<tr><td>' + lienPJ(f) + '</td><td>' + tailleLisible(f.taille) + '</td><td>' + fDateHeure(e.date) + '</td><td>' + esc(e.auteur) + '</td>' +
+          '<td>' + (e.type === 'ouverture' ? 'Ouverture du ticket' : 'Mise à jour du ' + fDate(e.date)) + '</td></tr>').join('') + '</tbody></table></div>' +
+        '<p class="rp-petit">Cliquez sur un nom de fichier pour le télécharger.</p>'
+        : '<p class="rp-petit">Aucun fichier uploadé sur ce ticket.</p>') + '</div></section>';
+  }
+
   /* =====================================================================
    * Écran 4 – Fiche ticket (sur le modèle de « Tickets Répondre » Netcom)
    *   En-tête · liens · historique des échanges · bloc « Ticket N° » avec les
@@ -2382,10 +2533,12 @@ body.fp-page .nc-page { background: var(--nc-peche); }
         (e.servicesImpactes && e.servicesImpactes.length ? ligne('Services impactés', esc(e.servicesImpactes.join(', '))) : '') +
         (e.interlocuteur || e.joignable ? ligne('Interlocuteur', esc(e.interlocuteur || '—') + (e.joignable ? ' – joignable au ' + esc(e.joignable) : '')) : '') +
         ligne('Description', esc(e.commentaire)) +
+        (e.fichiers && e.fichiers.length ? ligne('Pièces jointes', e.fichiers.map(lienPJ).join(' ')) : '') +
         ligne('Notification', 'envoyée à ' + esc(e.notifies.join(', ')));
     } else {
       if (e.changements && e.changements.length) corps += ligne('Modifications', '<ul class="rp-modifs">' + e.changements.map(ligneChangement).join('') + '</ul>');
       if (e.commentaire) corps += ligne('Commentaire', esc(e.commentaire));
+      if (e.fichiers && e.fichiers.length) corps += ligne('Pièces jointes', e.fichiers.map(lienPJ).join(' '));
       corps += ligne('Notifiés', e.notifies && e.notifies.length ? esc(e.notifies.join(', ')) : '<i>aucun destinataire</i>');
     }
     const tete = e.type === 'ouverture'
@@ -2425,7 +2578,7 @@ body.fp-page .nc-page { background: var(--nc-peche); }
       '</div>' +
       '<section class="rp-histo" aria-label="Historique des échanges">' + t.historique.map((e) => blocEvenement(t, e)).join('') + '</section>' +
       blocDemandesTicket(t) +
-      '<div id="rpForm"></div>';
+      '<div id="rpForm"></div><div id="rpFichiers">' + sectionFichiers(t) + '</div>';
     rendreFormulaire(t);
   }
 
@@ -2433,7 +2586,7 @@ body.fp-page .nc-page { background: var(--nc-peche); }
   function rendreFormulaire(t) {
     const ferme = t.etat === 'FER';
     const d = { etat: t.etat, agent: t.agent, typo: t.typo, sous: t.sous, motifStandby: t.motifStandby || null, champs: Object.assign({}, t.champs), destinataires: (t.destinataires || []).slice(), commentaire: '' };
-    const ctx = { t, d, ferme, tente: false, groupesOuverts: {} };
+    const ctx = { t, d, ferme, tente: false, groupesOuverts: {}, fichiers: [] };
     const peutReaffecter = !ferme && (estManager() || (t.agent && t.agent === moi()));
     const agents = Object.keys(PHX.EQUIPES).sort();
     const optAgents = (!t.agent ? '<option value="">Non affecté</option>' : '') +
@@ -2467,7 +2620,7 @@ body.fp-page .nc-page { background: var(--nc-peche); }
       '</div><div id="rpSpec"></div></div></section>' +
 
       '<div class="rp-commentaire"><label for="rpCom"><b>Commentaire :</b></label> <span class="tk-err" data-err="commentaire"></span>' +
-      '<textarea id="rpCom" rows="6"' + (ferme ? ' disabled' : '') + ' placeholder="' + (ferme ? '' : 'Commentaire visible dans l’historique du ticket et dans l’e-mail de notification') + '"></textarea></div>' +
+      '<textarea id="rpCom" rows="6"' + (ferme ? ' disabled' : '') + ' placeholder="' + (ferme ? '' : 'Commentaire visible dans l’historique du ticket et dans l’e-mail de notification') + '"></textarea>' + (ferme ? '' : zonePJ('rp')) + '</div>' +
 
       '<section class="rp-panneau" aria-labelledby="rpNotifTitre"><h3 class="rp-panneau-tete" id="rpNotifTitre">Notification par email :</h3><div class="rp-panneau-corps" id="rpNotif"></div></section>' +
 
@@ -2477,6 +2630,7 @@ body.fp-page .nc-page { background: var(--nc-peche); }
     rendreSpec(ctx);
     rendreNotif(ctx);
     majEtats(ctx);
+    if (!ferme) brancherPJ('rp', ctx.fichiers, () => evaluer(ctx));
     evaluer(ctx);
 
     const f = $('#rpForm');
@@ -2775,6 +2929,7 @@ body.fp-page .nc-page { background: var(--nc-peche); }
     if (modifies.etat) libs.push('État');
     diff.forEach((x) => { const c = champ(x.code); libs.push(c ? c.libelle : (LIB_CHANGEMENT[x.code] || x.code)); });
     if (d.commentaire) libs.push('Commentaire');
+    if (ctx.fichiers && ctx.fichiers.length) libs.push(pluriel(ctx.fichiers.length, 'pièce jointe'));
     const resume = $('#rpResume');
     const nbErr = Object.keys(v.err).length;
     if (ctx.tente && nbErr) { resume.className = 'rp-resume err'; resume.textContent = 'Corrigez ' + (nbErr > 1 ? 'les ' + nbErr + ' champs signalés' : 'le champ signalé') + ' avant d’enregistrer.'; }
@@ -2792,7 +2947,7 @@ body.fp-page .nc-page { background: var(--nc-peche); }
       if (premier) { const z = premier.closest('.rp-champ, .rp-commentaire'); const ctl = z && $('input, select, textarea', z); (ctl || premier).focus(); premier.scrollIntoView({ block: 'center' }); }
       return;
     }
-    if (!diff.length && d.etat === t.etat && !d.commentaire) { toast('Aucune modification à enregistrer.'); return; }
+    if (!diff.length && d.etat === t.etat && !d.commentaire && !ctx.fichiers.length) { toast('Aucune modification à enregistrer.'); return; }
     if (v.avert.length) {
       ouvrirModal({
         titre: 'Confirmer l’enregistrement',
@@ -2820,7 +2975,8 @@ body.fp-page .nc-page { background: var(--nc-peche); }
       else if (PHX.etat(etatAvant).tranche && d.etat === 'OUV') { t.dateResolution = null; t.decision = null; }
     }
     const notifies = unique([t.agent].concat(t.destinataires));
-    t.historique.push({ type: 'maj', saisie: true, date: maintenant, auteur: moi(), etatAvant, etatApres: t.etat, changements: diff, commentaire: d.commentaire, notifies });
+    const fichiers = enregistrerPJ(ctx.fichiers);
+    t.historique.push({ type: 'maj', saisie: true, date: maintenant, auteur: moi(), etatAvant, etatApres: t.etat, changements: diff, commentaire: d.commentaire, notifies, fichiers: fichiers.length ? fichiers : undefined });
     t.dateMaj = maintenant;
     if (d.commentaire) t.dernierCommentaire = d.commentaire;
     store.tickets[t.id] = instantane(t);
@@ -2829,7 +2985,7 @@ body.fp-page .nc-page { background: var(--nc-peche); }
     const evs = $$('.rp-ev');
     const dernier = evs[evs.length - 1];
     if (dernier) { dernier.classList.add('rp-ev-flash'); dernier.scrollIntoView({ block: 'center' }); }
-    toast('Ticket n° ' + t.id + ' enregistré. ' + (notifies.length ? 'E-mail envoyé à : ' + notifies.join(', ') + ' (simulation).' : 'Aucun destinataire à notifier.'));
+    toast('Ticket n° ' + t.id + ' enregistré' + (fichiers.length ? ' avec ' + pluriel(fichiers.length, 'pièce jointe') : '') + '. ' + (notifies.length ? 'E-mail envoyé à : ' + notifies.join(', ') + ' (simulation).' : 'Aucun destinataire à notifier.'));
   }
 
   function ouvrirRegles() {
@@ -3734,6 +3890,7 @@ body.fp-page .nc-page { background: var(--nc-peche); }
       objet: '', interlocuteur: '', joignable: ''
     };
     ctxCT.apres = () => evaluerCreation();
+    ctxCT.fichiers = [];
     page.innerHTML = titre('Ouvrir un ticket', '<a class="nc-btn" href="' + retour + '">' + img('retour') + 'Retour</a>') +
       '<div class="ct-cadre">' +
       '<div class="ct-ligne"><label for="ctCode" class="ct-lib">Code partenaire</label>' +
@@ -3748,7 +3905,7 @@ body.fp-page .nc-page { background: var(--nc-peche); }
       '<div class="rp-grille ct-commun">' +
       '<label for="ctInterlocuteur">Nom de l’interlocuteur</label><div class="rp-champ"><input type="text" id="ctInterlocuteur" maxlength="80" placeholder="Contact chez le partenaire"></div>' +
       '<label for="ctJoignable">Joignable au</label><div class="rp-champ"><input type="text" id="ctJoignable" maxlength="40" placeholder="Téléphone ou e-mail"></div>' +
-      '</div></div>' +
+      '</div><div class="ct-pj">' + zonePJ('ct') + '</div></div>' +
       '<section class="rp-panneau ct-notif" aria-labelledby="ctNotifTitre"><h3 class="rp-panneau-tete" id="ctNotifTitre">Notification par email :</h3><div class="rp-panneau-corps" id="rpNotif"></div></section>' +
       '<div class="rp-pied ct-pied"><div class="rp-resume" id="ctResume" aria-live="polite"></div>' +
       '<span class="rp-petit">Le ticket est créé à l’état Ouvert, sans agent : il arrive dans la file de sa typologie.</span>' +
@@ -3773,7 +3930,10 @@ body.fp-page .nc-page { background: var(--nc-peche); }
     const choisir = (b) => {
       lireCreation();
       tabs.forEach((x) => { const actif = x === b; x.setAttribute('aria-selected', String(actif)); x.tabIndex = actif ? 0 : -1; });
+      const objetsAvant = (PHX.typo(ctxCT.typo) || {}).objets || [];
       ctxCT.typo = ctxCT.d.typo = b.getAttribute('data-typo');
+      const objetsApres = PHX.typo(ctxCT.typo).objets;
+      if (objetsApres ? objetsApres.indexOf(ctxCT.objet) < 0 : objetsAvant.indexOf(ctxCT.objet) >= 0) ctxCT.objet = '';
       ctxCT.d.sous = ''; ctxCT.d.champs = {};
       $('#ctPanneau').setAttribute('aria-labelledby', b.id);
       rendrePanneauCreation(); evaluerCreation();
@@ -3792,6 +3952,7 @@ body.fp-page .nc-page { background: var(--nc-peche); }
     });
     $('#ctPanneau').addEventListener('input', () => evaluerCreation());
     $('#ctAjouter').addEventListener('click', ajouterTicket);
+    brancherPJ('ct', ctxCT.fichiers, () => evaluerCreation());
     rendrePanneauCreation();
     rendreNotif(ctxCT);
     evaluerCreation();
@@ -3824,7 +3985,11 @@ body.fp-page .nc-page { background: var(--nc-peche); }
       T.sous.map((s) => '<option value="' + s.code + '"' + (s.code === d.sous ? ' selected' : '') + '>' + esc(s.libelle) + '</option>').join('') + '</select>' +
       '<div class="rp-aide">Détermine la boîte fonctionnelle notifiée.</div><div class="tk-err" data-err-ct="sous"></div></div>' +
       '<span></span><span></span>' +
-      '<label for="ctObjet" class="ct-col1">Objet <span class="req" aria-hidden="true">*</span></label><div class="rp-champ rp-large"><input type="text" id="ctObjet" maxlength="150" value="' + esc(ctxCT.objet) + '" placeholder="Résumé de la demande du partenaire"><div class="tk-err" data-err-ct="objet"></div></div>' +
+      '<label for="ctObjet" class="ct-col1">Objet <span class="req" aria-hidden="true">*</span></label><div class="rp-champ rp-large">' +
+      (T.objets
+        ? '<select id="ctObjet"><option value="">--Sélectionner--</option>' + T.objets.map((o) => '<option' + (o === ctxCT.objet ? ' selected' : '') + '>' + esc(o) + '</option>').join('') + '</select><div class="rp-aide">Liste d’objets propre au ' + esc(T.libelle) + ' ; précisez la demande dans la description.</div>'
+        : '<input type="text" id="ctObjet" maxlength="150" value="' + esc(ctxCT.objet) + '" placeholder="Résumé de la demande du partenaire">') +
+      '<div class="tk-err" data-err-ct="objet"></div></div>' +
       (champs.length ? '<div class="rp-sec">Champs spécifiques – ' + esc(T.libelle + ' › ' + libSous(d.typo, d.sous)) + '</div>' + champs.map((c) => {
         const id = 'ctc_' + c.code;
         const lab = (c.type === 'multi' ? '<span class="rp-lib" id="lab_' + id + '">' : '<label for="' + id + '">') + esc(c.libelle) +
@@ -3888,6 +4053,7 @@ body.fp-page .nc-page { background: var(--nc-peche); }
     champsCreation(d).forEach((c) => { if (autorise(c) && d.champs[c.code] !== undefined) champs[c.code] = d.champs[c.code]; });
     const destinataires = d.destinataires.slice();
     const notifies = unique([S.boite].concat(destinataires));
+    const fichiers = enregistrerPJ(ctxCT.fichiers);
     const t = {
       id, typo: d.typo, sous: d.sous, etat: 'OUV', partenaireCode: p.code, partenaireRS: p.rs,
       dateCreation: maintenant, dateMaj: maintenant, dateResolution: null, dateFermeture: null,
@@ -3895,14 +4061,14 @@ body.fp-page .nc-page { background: var(--nc-peche); }
       destinataires, interlocuteur: ctxCT.interlocuteur, joignable: ctxCT.joignable, dernierCommentaire: d.commentaire, cree: true,
       historique: [{ type: 'ouverture', date: maintenant, auteur: moi(), etatApres: 'OUV', typo: d.typo, sous: d.sous,
         servicesImpactes: Array.isArray(champs.servicesImpactes) ? champs.servicesImpactes.slice() : undefined,
-        interlocuteur: ctxCT.interlocuteur, joignable: ctxCT.joignable, changements: [], commentaire: d.commentaire, notifies }]
+        interlocuteur: ctxCT.interlocuteur, joignable: ctxCT.joignable, changements: [], commentaire: d.commentaire, notifies, fichiers: fichiers.length ? fichiers : undefined }]
     };
     TICKETS.push(t); PAR_ID[id] = t;
     store.nouveaux[id] = JSON.parse(JSON.stringify(t)); // état initial ; les mises à jour suivent dans store.tickets
     sauver();
     liste.hashListe = ctxCT.retour; liste.ordre = []; liste.pageMemo = 1;
     location.hash = '#/ticket/' + id;
-    toast('Ticket n° ' + id + ' créé dans la file ' + libTypo(d.typo) + ' › ' + S.libelle + '. E-mail envoyé à : ' + notifies.join(', ') + ' (simulation).');
+    toast('Ticket n° ' + id + ' créé dans la file ' + libTypo(d.typo) + ' › ' + S.libelle + (fichiers.length ? ' avec ' + pluriel(fichiers.length, 'pièce jointe') : '') + '. E-mail envoyé à : ' + notifies.join(', ') + ' (simulation).');
   }
 
   // Tickets créés pendant la démo : rechargés à l'ouverture, avant leurs mises à jour
@@ -4431,6 +4597,8 @@ body.fp-page .nc-page { background: var(--nc-peche); }
     if (!e.target.closest('.nc-menu-rapide')) fermerMenuRapide();
     const lienDM = e.target.closest('[data-dm]');
     if (lienDM) { e.preventDefault(); ouvrirDemande(+lienDM.getAttribute('data-dm')); return; }
+    const lienPj = e.target.closest('[data-pj]');
+    if (lienPj) { e.preventDefault(); telechargerPJ(lienPj.getAttribute('data-pj')); return; }
     const hm = e.target.closest('[data-hors-maquette]');
     if (hm) { e.preventDefault(); toast(hm.getAttribute('data-msg') || 'Hors périmètre de la maquette Tickets.'); }
   });
@@ -4531,6 +4699,7 @@ body.fp-page .nc-page { background: var(--nc-peche); }
   }
   function reinitialiser() {
     store.profil = 'agent'; store.colonnes = {}; store.champsAjoutes = []; store.tickets = {}; store.demandes = {}; store.nouveaux = {};
+    PJ.vider();
     genererDonnees();
     ctxDM = { cle: null };
     ctxPT = { cle: null };

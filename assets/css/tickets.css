@@ -603,3 +603,20 @@ body.fp-page .nc-page { background: var(--nc-peche); }
 .ms-lien:hover { text-decoration: underline; }
 .ms-barre .rp-aide { margin: 0; }
 @media print { .ms-barre, .col-select { display: none !important; } }
+
+/* ---------- Pièces jointes ---------- */
+.pj-zone { margin-top: 10px; font-size: 13px; }
+.pj-zone label small { color: #777; font-weight: normal; }
+.pj-zone input[type="file"] { margin-left: 6px; font-size: 12px; }
+.pj-choisis { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.pj-choisis li { display: inline-flex; align-items: center; gap: 4px; background: #fff; border: 1px solid #e3b98a; border-radius: 12px; padding: 1px 4px 1px 6px; font-size: 12px; }
+.pj-choisis small { color: #888; }
+.pj-choisis button { border: 0; background: none; color: #B03A2E; cursor: pointer; font-size: 15px; line-height: 1; padding: 0 4px; }
+.pj-zone .tk-err { display: block; margin-top: 4px; }
+.pj-ico { display: inline-block; min-width: 30px; margin-right: 5px; padding: 0 3px; border-radius: 2px; color: #fff; font: bold 9px/14px Arial, sans-serif; text-align: center; vertical-align: 1px; }
+.pj-pdf { background: #C0392B; }
+.pj-xlsx { background: #1D6F42; }
+.pj-lien { white-space: nowrap; margin-right: 10px; }
+.pj-section { margin-top: 16px; }
+.pj-table td { white-space: nowrap; }
+.ct-pj { padding: 0 6px; }

@@ -41,11 +41,21 @@ Les typologies et sous-typologies sont lues dans le référentiel (`PHX.TYPOLOGI
 |---|---|---|---|
 | Réclamation | Facturation, SAV, Déploiement, Autre | reclamations@phenix-partner.fr | Oui |
 | Déploiement | DATA, VOIP, GSM | delivery@ (DATA, VOIP), mobility@ (GSM) | Non |
-| Facturation | Édition factures divers, Avoir | facturation@phenix-partner.fr | Non |
+| Facturation | Édition factures divers, Annulation facture | facturation@phenix-partner.fr | Non |
 | Recouvrement | Impayés, Rejet de prélèvement | recouvrement@phenix-partner.fr | Oui |
 | **ADV** (ajout) | Commande, Éléments manquants, Portabilité, Résiliation, Suspension, Redimensionnement | adv@phenix-partner.fr (à créer) | Non à ce stade |
 
 Les sous-typologies ADV sont une proposition, inspirée des files ADV de Netcom, à valider.
+
+Pour le **Déploiement** (DATA, VOIP, GSM), l'objet du ticket se choisit à la création dans une liste : *Accès API*, *Onboarding / Formation*, *Autre* (propriété `objets` de la typologie). Pour les autres typologies, l'objet reste un texte libre.
+
+### Pièces jointes
+
+- **Formats** : xlsx et pdf, 10 Mo maximum par fichier (proposition, paramétrable dans `PHX.PIECES_JOINTES`). Les autres formats sont refusés avec un message.
+- **Dépôt** : à l'ouverture du ticket (formulaire de création) et à chaque mise à jour, sous le commentaire. Plusieurs fichiers peuvent être déposés ; chacun peut être retiré avant l'enregistrement.
+- **Consultation** : la section **Fichiers uploadés**, en bas de la fiche ticket, liste tous les fichiers du plus récent au plus ancien (nom, taille, date, auteur, origine : ouverture ou mise à jour). Chaque nom est un lien de téléchargement. Les fichiers apparaissent aussi dans l'historique, sur l'événement qui les a déposés.
+- **Ticket fermé** : plus de dépôt possible, les fichiers restent téléchargeables.
+- **Dans la maquette** : le contenu des fichiers déposés reste dans le navigateur (IndexedDB) ; les tickets fictifs ont des pièces jointes de démonstration.
 
 ### Liste des tickets
 

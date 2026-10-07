@@ -653,6 +653,120 @@
     toast(pluriel(plan.length, 'ticket') + ' mis à jour : historique complété et notifications envoyées (simulation).');
   }
 
+
+  /* ---------- Pièces jointes (xlsx, pdf) : dépôt à la création et à chaque mise à jour ----------
+   * Dans la maquette, le contenu des fichiers reste dans le navigateur (IndexedDB) ;
+   * les métadonnées (nom, type, taille) sont inscrites dans l'historique du ticket. */
+  const PJ_META = {};
+  const PJ = (() => {
+    const memoire = {};
+    let dbp = null;
+    const ouvrir = () => dbp || (dbp = new Promise((res) => {
+      try {
+        const r = indexedDB.open('phenix-tickets-pj', 1);
+        r.onupgradeneeded = () => r.result.createObjectStore('fichiers');
+        r.onsuccess = () => res(r.result);
+        r.onerror = () => res(null);
+      } catch (e) { res(null); }
+    }));
+    const transaction = (mode, action) => ouvrir().then((db) => new Promise((res) => {
+      if (!db) { res(null); return; }
+      try {
+        const tx = db.transaction('fichiers', mode);
+        const rq = action(tx.objectStore('fichiers'));
+        tx.oncomplete = () => res(rq && rq.result !== undefined ? rq.result : null);
+        tx.onerror = () => res(null);
+      } catch (e) { res(null); }
+    }));
+    return {
+      mettre: (id, blob) => { memoire[id] = blob; return transaction('readwrite', (st) => st.put(blob, id)); },
+      lire: (id) => (memoire[id] ? Promise.resolve(memoire[id]) : transaction('readonly', (st) => st.get(id))),
+      vider: () => { Object.keys(memoire).forEach((k) => { delete memoire[k]; }); return transaction('readwrite', (st) => st.clear()); }
+    };
+  })();
+  const extPJ = (nom) => { const m = /\.([a-z0-9]+)$/i.exec(nom || ''); return m ? m[1].toLowerCase() : ''; };
+  const tailleLisible = (o) => (o < 1024 ? o + ' o' : o < 1048576 ? fmtNb.format(o / 1024) + ' Ko' : fmtNb.format(o / 1048576) + ' Mo');
+  const iconePJ = (type) => '<span class="pj-ico pj-' + esc(type) + '" aria-hidden="true">' + esc(type.toUpperCase()) + '</span>';
+  function lienPJ(f) {
+    PJ_META[f.id] = f;
+    return '<a href="#" class="pj-lien" data-pj="' + esc(f.id) + '" title="Télécharger ' + esc(f.nom) + ' (' + tailleLisible(f.taille) + ')">' + iconePJ(f.type) + esc(f.nom) + '</a>';
+  }
+  function zonePJ(prefixe) {
+    const P = PHX.PIECES_JOINTES;
+    return '<div class="pj-zone"><label for="' + prefixe + 'Pj"><b>Pièces jointes</b> <small>(' + P.extensions.join(', ') + ' ; ' + tailleLisible(P.tailleMax) + ' maximum par fichier)</small></label> ' +
+      '<input type="file" id="' + prefixe + 'Pj" multiple accept=".pdf,.xlsx,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">' +
+      '<ul class="pj-choisis" id="' + prefixe + 'PjListe"></ul><div class="tk-err" id="' + prefixe + 'PjErr"></div></div>';
+  }
+  function brancherPJ(prefixe, fichiers, apres) {
+    const input = $('#' + prefixe + 'Pj'), listeEl = $('#' + prefixe + 'PjListe'), err = $('#' + prefixe + 'PjErr');
+    const P = PHX.PIECES_JOINTES;
+    const rendre = () => {
+      listeEl.innerHTML = fichiers.map((f, i) => '<li>' + iconePJ(extPJ(f.name)) + esc(f.name) + ' <small>' + tailleLisible(f.size) + '</small>' +
+        '<button type="button" data-retirer-pj="' + i + '" aria-label="Retirer ' + esc(f.name) + '">×</button></li>').join('');
+    };
+    input.addEventListener('change', () => {
+      const refus = [];
+      Array.prototype.forEach.call(input.files, (f) => {
+        if (P.extensions.indexOf(extPJ(f.name)) < 0) refus.push(f.name + ' : format non accepté');
+        else if (!f.size) refus.push(f.name + ' : fichier vide');
+        else if (f.size > P.tailleMax) refus.push(f.name + ' : plus de ' + tailleLisible(P.tailleMax));
+        else fichiers.push(f);
+      });
+      err.textContent = refus.length ? 'Refusé : ' + refus.join(' ; ') + '. Formats acceptés : xlsx et pdf.' : '';
+      input.value = '';
+      rendre(); apres();
+    });
+    listeEl.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-retirer-pj]');
+      if (!b) return;
+      fichiers.splice(+b.getAttribute('data-retirer-pj'), 1);
+      rendre(); apres();
+    });
+    rendre();
+  }
+  function enregistrerPJ(fichiers) {
+    return fichiers.map((f, i) => {
+      const meta = { id: 'pj-' + Date.now().toString(36) + '-' + i + '-' + Math.random().toString(36).slice(2, 7), nom: f.name, type: extPJ(f.name), taille: f.size };
+      PJ.mettre(meta.id, f);
+      return meta;
+    });
+  }
+  function blobDemo(type) {
+    const bin = atob(PHX.FICHIERS_DEMO[type]);
+    const u = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+    return new Blob([u], { type: type === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  }
+  async function telechargerPJ(id) {
+    const f = PJ_META[id];
+    if (!f) return;
+    const blob = f.demo ? blobDemo(f.type) : await PJ.lire(f.id);
+    if (!blob) { toast('Fichier indisponible ici : dans la maquette, le contenu des fichiers reste dans le navigateur où ils ont été déposés.'); return; }
+    const dl = await capaciteTelechargement();
+    if (dl) {
+      try { await dl.save({ filename: f.nom, data: blob }); } catch (err) { if (!err || err.code !== 'declined') toast('Le téléchargement n’est pas disponible dans cette vue.'); }
+      return;
+    }
+    if (dl === null) { toast('Le téléchargement n’est pas disponible dans cette vue.'); return; }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = f.nom;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 1000);
+  }
+  // Section « Fichiers uploadés » en bas de la fiche ticket (du plus récent au plus ancien)
+  function sectionFichiers(t) {
+    const lignes = [];
+    t.historique.forEach((e) => (e.fichiers || []).forEach((f) => lignes.push({ f, e })));
+    lignes.sort((a, b) => b.e.date - a.e.date);
+    return '<section class="rp-panneau pj-section" aria-labelledby="pjTitre"><h3 class="rp-panneau-tete" id="pjTitre">Fichiers uploadés (' + lignes.length + ')</h3><div class="rp-panneau-corps">' +
+      (lignes.length ? '<div class="st-wrap"><table class="nc-grille dm-gv pj-table"><thead><tr><th scope="col">Fichier</th><th scope="col">Taille</th><th scope="col">Déposé le</th><th scope="col">Par</th><th scope="col">Origine</th></tr></thead><tbody>' +
+        lignes.map(({ f, e }) => '<tr><td>' + lienPJ(f) + '</td><td>' + tailleLisible(f.taille) + '</td><td>' + fDateHeure(e.date) + '</td><td>' + esc(e.auteur) + '</td>' +
+          '<td>' + (e.type === 'ouverture' ? 'Ouverture du ticket' : 'Mise à jour du ' + fDate(e.date)) + '</td></tr>').join('') + '</tbody></table></div>' +
+        '<p class="rp-petit">Cliquez sur un nom de fichier pour le télécharger.</p>'
+        : '<p class="rp-petit">Aucun fichier uploadé sur ce ticket.</p>') + '</div></section>';
+  }
+
   /* =====================================================================
    * Écran 4 – Fiche ticket (sur le modèle de « Tickets Répondre » Netcom)
    *   En-tête · liens · historique des échanges · bloc « Ticket N° » avec les
@@ -708,10 +822,12 @@
         (e.servicesImpactes && e.servicesImpactes.length ? ligne('Services impactés', esc(e.servicesImpactes.join(', '))) : '') +
         (e.interlocuteur || e.joignable ? ligne('Interlocuteur', esc(e.interlocuteur || '—') + (e.joignable ? ' – joignable au ' + esc(e.joignable) : '')) : '') +
         ligne('Description', esc(e.commentaire)) +
+        (e.fichiers && e.fichiers.length ? ligne('Pièces jointes', e.fichiers.map(lienPJ).join(' ')) : '') +
         ligne('Notification', 'envoyée à ' + esc(e.notifies.join(', ')));
     } else {
       if (e.changements && e.changements.length) corps += ligne('Modifications', '<ul class="rp-modifs">' + e.changements.map(ligneChangement).join('') + '</ul>');
       if (e.commentaire) corps += ligne('Commentaire', esc(e.commentaire));
+      if (e.fichiers && e.fichiers.length) corps += ligne('Pièces jointes', e.fichiers.map(lienPJ).join(' '));
       corps += ligne('Notifiés', e.notifies && e.notifies.length ? esc(e.notifies.join(', ')) : '<i>aucun destinataire</i>');
     }
     const tete = e.type === 'ouverture'
@@ -751,7 +867,7 @@
       '</div>' +
       '<section class="rp-histo" aria-label="Historique des échanges">' + t.historique.map((e) => blocEvenement(t, e)).join('') + '</section>' +
       blocDemandesTicket(t) +
-      '<div id="rpForm"></div>';
+      '<div id="rpForm"></div><div id="rpFichiers">' + sectionFichiers(t) + '</div>';
     rendreFormulaire(t);
   }
 
@@ -759,7 +875,7 @@
   function rendreFormulaire(t) {
     const ferme = t.etat === 'FER';
     const d = { etat: t.etat, agent: t.agent, typo: t.typo, sous: t.sous, motifStandby: t.motifStandby || null, champs: Object.assign({}, t.champs), destinataires: (t.destinataires || []).slice(), commentaire: '' };
-    const ctx = { t, d, ferme, tente: false, groupesOuverts: {} };
+    const ctx = { t, d, ferme, tente: false, groupesOuverts: {}, fichiers: [] };
     const peutReaffecter = !ferme && (estManager() || (t.agent && t.agent === moi()));
     const agents = Object.keys(PHX.EQUIPES).sort();
     const optAgents = (!t.agent ? '<option value="">Non affecté</option>' : '') +
@@ -793,7 +909,7 @@
       '</div><div id="rpSpec"></div></div></section>' +
 
       '<div class="rp-commentaire"><label for="rpCom"><b>Commentaire :</b></label> <span class="tk-err" data-err="commentaire"></span>' +
-      '<textarea id="rpCom" rows="6"' + (ferme ? ' disabled' : '') + ' placeholder="' + (ferme ? '' : 'Commentaire visible dans l’historique du ticket et dans l’e-mail de notification') + '"></textarea></div>' +
+      '<textarea id="rpCom" rows="6"' + (ferme ? ' disabled' : '') + ' placeholder="' + (ferme ? '' : 'Commentaire visible dans l’historique du ticket et dans l’e-mail de notification') + '"></textarea>' + (ferme ? '' : zonePJ('rp')) + '</div>' +
 
       '<section class="rp-panneau" aria-labelledby="rpNotifTitre"><h3 class="rp-panneau-tete" id="rpNotifTitre">Notification par email :</h3><div class="rp-panneau-corps" id="rpNotif"></div></section>' +
 
@@ -803,6 +919,7 @@
     rendreSpec(ctx);
     rendreNotif(ctx);
     majEtats(ctx);
+    if (!ferme) brancherPJ('rp', ctx.fichiers, () => evaluer(ctx));
     evaluer(ctx);
 
     const f = $('#rpForm');
@@ -1101,6 +1218,7 @@
     if (modifies.etat) libs.push('État');
     diff.forEach((x) => { const c = champ(x.code); libs.push(c ? c.libelle : (LIB_CHANGEMENT[x.code] || x.code)); });
     if (d.commentaire) libs.push('Commentaire');
+    if (ctx.fichiers && ctx.fichiers.length) libs.push(pluriel(ctx.fichiers.length, 'pièce jointe'));
     const resume = $('#rpResume');
     const nbErr = Object.keys(v.err).length;
     if (ctx.tente && nbErr) { resume.className = 'rp-resume err'; resume.textContent = 'Corrigez ' + (nbErr > 1 ? 'les ' + nbErr + ' champs signalés' : 'le champ signalé') + ' avant d’enregistrer.'; }
@@ -1118,7 +1236,7 @@
       if (premier) { const z = premier.closest('.rp-champ, .rp-commentaire'); const ctl = z && $('input, select, textarea', z); (ctl || premier).focus(); premier.scrollIntoView({ block: 'center' }); }
       return;
     }
-    if (!diff.length && d.etat === t.etat && !d.commentaire) { toast('Aucune modification à enregistrer.'); return; }
+    if (!diff.length && d.etat === t.etat && !d.commentaire && !ctx.fichiers.length) { toast('Aucune modification à enregistrer.'); return; }
     if (v.avert.length) {
       ouvrirModal({
         titre: 'Confirmer l’enregistrement',
@@ -1146,7 +1264,8 @@
       else if (PHX.etat(etatAvant).tranche && d.etat === 'OUV') { t.dateResolution = null; t.decision = null; }
     }
     const notifies = unique([t.agent].concat(t.destinataires));
-    t.historique.push({ type: 'maj', saisie: true, date: maintenant, auteur: moi(), etatAvant, etatApres: t.etat, changements: diff, commentaire: d.commentaire, notifies });
+    const fichiers = enregistrerPJ(ctx.fichiers);
+    t.historique.push({ type: 'maj', saisie: true, date: maintenant, auteur: moi(), etatAvant, etatApres: t.etat, changements: diff, commentaire: d.commentaire, notifies, fichiers: fichiers.length ? fichiers : undefined });
     t.dateMaj = maintenant;
     if (d.commentaire) t.dernierCommentaire = d.commentaire;
     store.tickets[t.id] = instantane(t);
@@ -1155,7 +1274,7 @@
     const evs = $$('.rp-ev');
     const dernier = evs[evs.length - 1];
     if (dernier) { dernier.classList.add('rp-ev-flash'); dernier.scrollIntoView({ block: 'center' }); }
-    toast('Ticket n° ' + t.id + ' enregistré. ' + (notifies.length ? 'E-mail envoyé à : ' + notifies.join(', ') + ' (simulation).' : 'Aucun destinataire à notifier.'));
+    toast('Ticket n° ' + t.id + ' enregistré' + (fichiers.length ? ' avec ' + pluriel(fichiers.length, 'pièce jointe') : '') + '. ' + (notifies.length ? 'E-mail envoyé à : ' + notifies.join(', ') + ' (simulation).' : 'Aucun destinataire à notifier.'));
   }
 
   function ouvrirRegles() {
@@ -2060,6 +2179,7 @@
       objet: '', interlocuteur: '', joignable: ''
     };
     ctxCT.apres = () => evaluerCreation();
+    ctxCT.fichiers = [];
     page.innerHTML = titre('Ouvrir un ticket', '<a class="nc-btn" href="' + retour + '">' + img('retour') + 'Retour</a>') +
       '<div class="ct-cadre">' +
       '<div class="ct-ligne"><label for="ctCode" class="ct-lib">Code partenaire</label>' +
@@ -2074,7 +2194,7 @@
       '<div class="rp-grille ct-commun">' +
       '<label for="ctInterlocuteur">Nom de l’interlocuteur</label><div class="rp-champ"><input type="text" id="ctInterlocuteur" maxlength="80" placeholder="Contact chez le partenaire"></div>' +
       '<label for="ctJoignable">Joignable au</label><div class="rp-champ"><input type="text" id="ctJoignable" maxlength="40" placeholder="Téléphone ou e-mail"></div>' +
-      '</div></div>' +
+      '</div><div class="ct-pj">' + zonePJ('ct') + '</div></div>' +
       '<section class="rp-panneau ct-notif" aria-labelledby="ctNotifTitre"><h3 class="rp-panneau-tete" id="ctNotifTitre">Notification par email :</h3><div class="rp-panneau-corps" id="rpNotif"></div></section>' +
       '<div class="rp-pied ct-pied"><div class="rp-resume" id="ctResume" aria-live="polite"></div>' +
       '<span class="rp-petit">Le ticket est créé à l’état Ouvert, sans agent : il arrive dans la file de sa typologie.</span>' +
@@ -2099,7 +2219,10 @@
     const choisir = (b) => {
       lireCreation();
       tabs.forEach((x) => { const actif = x === b; x.setAttribute('aria-selected', String(actif)); x.tabIndex = actif ? 0 : -1; });
+      const objetsAvant = (PHX.typo(ctxCT.typo) || {}).objets || [];
       ctxCT.typo = ctxCT.d.typo = b.getAttribute('data-typo');
+      const objetsApres = PHX.typo(ctxCT.typo).objets;
+      if (objetsApres ? objetsApres.indexOf(ctxCT.objet) < 0 : objetsAvant.indexOf(ctxCT.objet) >= 0) ctxCT.objet = '';
       ctxCT.d.sous = ''; ctxCT.d.champs = {};
       $('#ctPanneau').setAttribute('aria-labelledby', b.id);
       rendrePanneauCreation(); evaluerCreation();
@@ -2118,6 +2241,7 @@
     });
     $('#ctPanneau').addEventListener('input', () => evaluerCreation());
     $('#ctAjouter').addEventListener('click', ajouterTicket);
+    brancherPJ('ct', ctxCT.fichiers, () => evaluerCreation());
     rendrePanneauCreation();
     rendreNotif(ctxCT);
     evaluerCreation();
@@ -2150,7 +2274,11 @@
       T.sous.map((s) => '<option value="' + s.code + '"' + (s.code === d.sous ? ' selected' : '') + '>' + esc(s.libelle) + '</option>').join('') + '</select>' +
       '<div class="rp-aide">Détermine la boîte fonctionnelle notifiée.</div><div class="tk-err" data-err-ct="sous"></div></div>' +
       '<span></span><span></span>' +
-      '<label for="ctObjet" class="ct-col1">Objet <span class="req" aria-hidden="true">*</span></label><div class="rp-champ rp-large"><input type="text" id="ctObjet" maxlength="150" value="' + esc(ctxCT.objet) + '" placeholder="Résumé de la demande du partenaire"><div class="tk-err" data-err-ct="objet"></div></div>' +
+      '<label for="ctObjet" class="ct-col1">Objet <span class="req" aria-hidden="true">*</span></label><div class="rp-champ rp-large">' +
+      (T.objets
+        ? '<select id="ctObjet"><option value="">--Sélectionner--</option>' + T.objets.map((o) => '<option' + (o === ctxCT.objet ? ' selected' : '') + '>' + esc(o) + '</option>').join('') + '</select><div class="rp-aide">Liste d’objets propre au ' + esc(T.libelle) + ' ; précisez la demande dans la description.</div>'
+        : '<input type="text" id="ctObjet" maxlength="150" value="' + esc(ctxCT.objet) + '" placeholder="Résumé de la demande du partenaire">') +
+      '<div class="tk-err" data-err-ct="objet"></div></div>' +
       (champs.length ? '<div class="rp-sec">Champs spécifiques – ' + esc(T.libelle + ' › ' + libSous(d.typo, d.sous)) + '</div>' + champs.map((c) => {
         const id = 'ctc_' + c.code;
         const lab = (c.type === 'multi' ? '<span class="rp-lib" id="lab_' + id + '">' : '<label for="' + id + '">') + esc(c.libelle) +
@@ -2214,6 +2342,7 @@
     champsCreation(d).forEach((c) => { if (autorise(c) && d.champs[c.code] !== undefined) champs[c.code] = d.champs[c.code]; });
     const destinataires = d.destinataires.slice();
     const notifies = unique([S.boite].concat(destinataires));
+    const fichiers = enregistrerPJ(ctxCT.fichiers);
     const t = {
       id, typo: d.typo, sous: d.sous, etat: 'OUV', partenaireCode: p.code, partenaireRS: p.rs,
       dateCreation: maintenant, dateMaj: maintenant, dateResolution: null, dateFermeture: null,
@@ -2221,14 +2350,14 @@
       destinataires, interlocuteur: ctxCT.interlocuteur, joignable: ctxCT.joignable, dernierCommentaire: d.commentaire, cree: true,
       historique: [{ type: 'ouverture', date: maintenant, auteur: moi(), etatApres: 'OUV', typo: d.typo, sous: d.sous,
         servicesImpactes: Array.isArray(champs.servicesImpactes) ? champs.servicesImpactes.slice() : undefined,
-        interlocuteur: ctxCT.interlocuteur, joignable: ctxCT.joignable, changements: [], commentaire: d.commentaire, notifies }]
+        interlocuteur: ctxCT.interlocuteur, joignable: ctxCT.joignable, changements: [], commentaire: d.commentaire, notifies, fichiers: fichiers.length ? fichiers : undefined }]
     };
     TICKETS.push(t); PAR_ID[id] = t;
     store.nouveaux[id] = JSON.parse(JSON.stringify(t)); // état initial ; les mises à jour suivent dans store.tickets
     sauver();
     liste.hashListe = ctxCT.retour; liste.ordre = []; liste.pageMemo = 1;
     location.hash = '#/ticket/' + id;
-    toast('Ticket n° ' + id + ' créé dans la file ' + libTypo(d.typo) + ' › ' + S.libelle + '. E-mail envoyé à : ' + notifies.join(', ') + ' (simulation).');
+    toast('Ticket n° ' + id + ' créé dans la file ' + libTypo(d.typo) + ' › ' + S.libelle + (fichiers.length ? ' avec ' + pluriel(fichiers.length, 'pièce jointe') : '') + '. E-mail envoyé à : ' + notifies.join(', ') + ' (simulation).');
   }
 
   // Tickets créés pendant la démo : rechargés à l'ouverture, avant leurs mises à jour
@@ -2757,6 +2886,8 @@
     if (!e.target.closest('.nc-menu-rapide')) fermerMenuRapide();
     const lienDM = e.target.closest('[data-dm]');
     if (lienDM) { e.preventDefault(); ouvrirDemande(+lienDM.getAttribute('data-dm')); return; }
+    const lienPj = e.target.closest('[data-pj]');
+    if (lienPj) { e.preventDefault(); telechargerPJ(lienPj.getAttribute('data-pj')); return; }
     const hm = e.target.closest('[data-hors-maquette]');
     if (hm) { e.preventDefault(); toast(hm.getAttribute('data-msg') || 'Hors périmètre de la maquette Tickets.'); }
   });
@@ -2857,6 +2988,7 @@
   }
   function reinitialiser() {
     store.profil = 'agent'; store.colonnes = {}; store.champsAjoutes = []; store.tickets = {}; store.demandes = {}; store.nouveaux = {};
+    PJ.vider();
     genererDonnees();
     ctxDM = { cle: null };
     ctxPT = { cle: null };
